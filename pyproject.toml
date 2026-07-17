@@ -93,3 +93,17 @@ omit = [
 show_missing = true
 fail_under = 100
 exclude_also = ["if TYPE_CHECKING:"]
+
+[tool.cibuildwheel]
+# CPython 3.14 GIL builds only: cffi API mode targets a specific interpreter, so
+# no abi3 and no free-threaded (cp314t) wheels (per the v0.1 spec).
+build = "cp314-*"
+# pypa/build honors build-system.requires, so the pinned `ziglang` toolchain is
+# provisioned inside every build environment (including the manylinux/musllinux
+# containers) and the offline static-lib build in _cffi_build.py just works.
+build-frontend = "build"
+# Verify every built wheel by installing it and running the suite against it, as
+# a user would. Coverage enforcement is a PR-CI concern, not a wheel concern, so
+# the project's --cov addopts are cleared here.
+test-requires = "pytest"
+test-command = "pytest {project}/tests -o addopts="
