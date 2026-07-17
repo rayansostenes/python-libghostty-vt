@@ -11,10 +11,13 @@ public types at compile time:
   no other line may. A misuse that stops being flagged means a type guard
   regressed; a flagged untagged line means the suite itself is broken.
 
-All five checkers (mypy, pyright, basedpyright, ty, pyrefly) run unpinned at the
-latest stable resolved by ``uv`` at run time -- a checker release can therefore
-break this suite without a code change, which is accepted. The pyright version
-bundled by Pylance (VS Code's Python extension) is resolved from the
+mypy and pyright run from the project's pinned dev environment -- the same
+versions that gate PR CI -- because they must share the environment where
+``ghostty_vt`` is built and installed (needed for the suite's imports and for
+``--verifytypes``). basedpyright, ty, and pyrefly are not project dependencies,
+so ``uv`` resolves each to the latest stable at run time -- a checker release can
+therefore break this suite without a code change, which is accepted. The pyright
+version bundled by Pylance (VS Code's Python extension) is resolved from the
 pylance-release repo and run additionally when it differs from the latest
 pyright, so the editor experience is gated too.
 
@@ -48,6 +51,12 @@ PYRIGHT_CONFIG = SUITE_DIR / "pyrightconfig.json"
 
 PACKAGE = "ghostty_vt"
 EXPECT_ERROR_MARKER = "# expect-error"
+
+# pyright is pinned in dev-deps with the [nodejs] extra so node ships as a
+# uv-cached PyPI wheel instead of being fetched from nodejs.org at run time
+# (setup-uv's cache does not cover pyright-python's node download). Every pyright
+# invocation must carry that extra; basedpyright bundles its own node.
+PYRIGHT_SPEC = "pyright[nodejs]"
 
 # Pylance publishes the pyright version it bundles here, as {"pyrightVersion": ...}.
 PYLANCE_RELEASE_URL = (
@@ -272,8 +281,8 @@ def _validate(checker: str, reported: set[Location]) -> CheckResult:
     return result
 
 
-def _verify_types(spec: str) -> CheckResult:
-    result = CheckResult(f"{spec} --verifytypes")
+def _verify_types(spec: str, label: str) -> CheckResult:
+    result = CheckResult(f"{label} --verifytypes")
     proc = _run(
         [
             "uv",
@@ -311,33 +320,39 @@ def _verify_types(spec: str) -> CheckResult:
 # --- Pylance pyright resolution --------------------------------------------
 
 
+class PylanceResolutionError(RuntimeError):
+    """The Pylance-bundled pyright version could not be resolved."""
+
+
 def _latest_pyright_version() -> str:
-    proc = _run(["uv", "run", "--with", "pyright", "pyright", "--version"])
+    proc = _run(["uv", "run", "--with", PYRIGHT_SPEC, "pyright", "--version"])
     match = re.search(r"(\d+\.\d+\.\d+)", proc.stdout)
     if not match:
         raise RuntimeError(f"could not read pyright version from: {proc.stdout!r}")
     return match.group(1)
 
 
-def _pylance_pyright_version() -> str | None:
+def _pylance_pyright_version() -> str:
+    """Resolve the pyright version Pylance bundles, or raise.
+
+    A network or JSON failure raises rather than returning ``None``: silently
+    skipping the Pylance leg would let a Pylance-specific regression pass with a
+    green suite, so the caller turns any resolution failure into a hard failure.
+    """
     try:
         with urllib.request.urlopen(
             PYLANCE_RELEASE_URL, timeout=NETWORK_TIMEOUT
         ) as resp:
             payload = json.load(resp)
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
-        print(
-            f"warning: could not resolve Pylance pyright version ({exc}); skipping",
-            file=sys.stderr,
-        )
-        return None
+        raise PylanceResolutionError(
+            f"could not fetch pylance-release metadata: {exc}"
+        ) from exc
     version = payload.get("pyrightVersion")
     if not isinstance(version, str):
-        print(
-            "warning: pylance-release JSON has no pyrightVersion; skipping",
-            file=sys.stderr,
+        raise PylanceResolutionError(
+            "pylance-release JSON has no string pyrightVersion field"
         )
-        return None
     return version
 
 
@@ -363,40 +378,55 @@ def main() -> int:
         return 1
 
     latest_pyright = _latest_pyright_version()
-    pylance_pyright = _pylance_pyright_version()
 
     # (label, diagnostic collector) for every file-checking run.
     collectors: list[tuple[str, Callable[[], set[Location]]]] = [
         ("mypy", lambda: _collect_mypy(files)),
         (
             f"pyright=={latest_pyright} (latest)",
-            lambda: _collect_pyright_like("pyright", "pyright"),
+            lambda: _collect_pyright_like("pyright", PYRIGHT_SPEC),
         ),
         ("basedpyright", lambda: _collect_pyright_like("basedpyright", "basedpyright")),
         ("ty", lambda: _collect_ty(files)),
         ("pyrefly", lambda: _collect_pyrefly(files)),
     ]
 
-    verifytypes_specs = ["pyright"]
+    # (spec, label) for every --verifytypes run.
+    verifytypes_runs: list[tuple[str, str]] = [
+        (PYRIGHT_SPEC, f"pyright=={latest_pyright} (latest)")
+    ]
 
-    if pylance_pyright and pylance_pyright != latest_pyright:
-        spec = f"pyright=={pylance_pyright}"
-        collectors.append(
-            (f"{spec} (Pylance)", lambda s=spec: _collect_pyright_like("pyright", s))
+    results: list[CheckResult] = []
+
+    try:
+        pylance_pyright: str | None = _pylance_pyright_version()
+    except PylanceResolutionError as exc:
+        # A resolution failure is a hard failure, not a silent skip: the Pylance
+        # gate is an acceptance criterion, so a green suite must never mean it
+        # was quietly dropped.
+        failure = CheckResult("Pylance pyright resolution")
+        failure.failures.append(f"{exc}; the Pylance gate was not enforced")
+        results.append(failure)
+        pylance_pyright = None
+        _print_result(failure)
+        print()
+
+    if pylance_pyright is None:
+        pass  # failure already recorded above
+    elif pylance_pyright == latest_pyright:
+        print(
+            f"Pylance bundles pyright {pylance_pyright} == latest {latest_pyright}: "
+            "no extra run needed.\n"
         )
-        verifytypes_specs.append(spec)
+    else:
+        spec = f"pyright[nodejs]=={pylance_pyright}"
+        label = f"pyright=={pylance_pyright} (Pylance)"
+        collectors.append((label, lambda s=spec: _collect_pyright_like("pyright", s)))
+        verifytypes_runs.append((spec, label))
         print(
             f"Pylance bundles pyright {pylance_pyright} "
             f"(latest is {latest_pyright}): running both.\n"
         )
-    else:
-        seen = pylance_pyright or "?"
-        print(
-            f"Pylance bundles pyright {seen} == latest {latest_pyright}: "
-            "no extra run needed.\n"
-        )
-
-    results: list[CheckResult] = []
 
     print("Checkers over the suite:")
     for label, collector in collectors:
@@ -405,8 +435,8 @@ def main() -> int:
         _print_result(results[-1])
 
     print("\nType completeness (verifytypes):")
-    for spec in verifytypes_specs:
-        results.append(_verify_types(spec))
+    for spec, label in verifytypes_runs:
+        results.append(_verify_types(spec, label))
         _print_result(results[-1])
 
     failed = [r for r in results if not r.ok]

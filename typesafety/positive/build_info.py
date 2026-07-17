@@ -42,11 +42,16 @@ constructed = BuildInfo(
 )
 assert_type(constructed, BuildInfo)
 
-# Enum members are assignable to the enum type. The annotated binding is the
-# pin: it fails to check if RELEASE_FAST is not an OptimizeMode. (A direct
+# Every enum member is assignable to the enum type. The annotated binding is the
+# pin: it fails to check if a member is not an OptimizeMode, and removing or
+# renaming any member makes the access an error. (A direct
 # `assert_type(OptimizeMode.RELEASE_FAST, OptimizeMode)` would wrongly fail —
-# checkers infer the singleton literal type for a member access.)
-_assignable: OptimizeMode = OptimizeMode.RELEASE_FAST
+# checkers infer the singleton literal type for a member access.) Pinning all
+# four members means dropping any one turns the suite red.
+_debug: OptimizeMode = OptimizeMode.DEBUG
+_release_safe: OptimizeMode = OptimizeMode.RELEASE_SAFE
+_release_small: OptimizeMode = OptimizeMode.RELEASE_SMALL
+_release_fast: OptimizeMode = OptimizeMode.RELEASE_FAST
 
 # Top-level re-exported constants.
 assert_type(ghostty_vt.GHOSTTY_COMMIT, str)
