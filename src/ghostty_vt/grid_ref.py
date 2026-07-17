@@ -128,11 +128,15 @@ def _hyperlink(ref: Any) -> str | None:
     return bytes(_ffi.buffer(buf, out_len[0])).decode("utf-8")
 
 
-def _cell_attr(ref: Any, key: int, ctype: str) -> Any:
+def _resolve_cell(ref: Any) -> Any:
     cell = _ffi.new("GhosttyCell *")
     _result.check(_lib.ghostty_grid_ref_cell(ref, cell), "could not read cell")
+    return cell[0]
+
+
+def _cell_attr(cell: Any, key: int, ctype: str) -> Any:
     out = _ffi.new(ctype)
-    _result.check(_lib.ghostty_cell_get(cell[0], key, out), "could not read cell data")
+    _result.check(_lib.ghostty_cell_get(cell, key, out), "could not read cell data")
     return out[0]
 
 
@@ -144,9 +148,10 @@ def _read_style(ref: Any) -> Style:
 
 
 def _read_cell(ref: Any) -> Cell:
-    width = _cell_attr(ref, _lib.GHOSTTY_CELL_DATA_WIDE, "GhosttyCellWide *")
-    protected = _cell_attr(ref, _lib.GHOSTTY_CELL_DATA_PROTECTED, "bool *")
-    semantic = _cell_attr(ref, _lib.GHOSTTY_CELL_DATA_SEMANTIC_CONTENT, "int *")
+    cell = _resolve_cell(ref)
+    width = _cell_attr(cell, _lib.GHOSTTY_CELL_DATA_WIDE, "GhosttyCellWide *")
+    protected = _cell_attr(cell, _lib.GHOSTTY_CELL_DATA_PROTECTED, "bool *")
+    semantic = _cell_attr(cell, _lib.GHOSTTY_CELL_DATA_SEMANTIC_CONTENT, "int *")
     return Cell(
         text=_graphemes(ref),
         style=_read_style(ref),
@@ -181,7 +186,12 @@ class GridRef:
         self._ref = ref
 
     def cell(self) -> Cell:
-        """Read the cell at this position as an immutable :class:`Cell`."""
+        """Read the cell at this position as an immutable :class:`Cell`.
+
+        Raises:
+            UseAfterCloseError: If the owning terminal has been closed.
+        """
+        self._handle()
         return _read_cell(self._ref)
 
     def point(self, tag: PointTag) -> Point | None:

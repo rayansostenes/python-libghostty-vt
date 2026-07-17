@@ -157,6 +157,15 @@ def test_grid_ref_on_closed_terminal_raises() -> None:
         term.grid_ref(Point(PointTag.ACTIVE, 0, 0))
 
 
+def test_grid_ref_cell_on_closed_terminal_raises() -> None:
+    term = Terminal(5, 2)
+    term.feed(b"A")
+    ref = term.grid_ref(Point(PointTag.ACTIVE, 0, 0))
+    term.close()
+    with pytest.raises(UseAfterCloseError):
+        ref.cell()
+
+
 def test_tracked_ref_follows_a_scroll() -> None:
     with Terminal(10, 4) as term:
         term.feed(b"\x1b[3;1HROW")

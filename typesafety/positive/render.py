@@ -61,6 +61,6 @@ assert_type(cell.has_styling, bool)
 
 # Every Dirty member is assignable to the enum type; the annotated binding is the
 # pin (a member access infers the singleton literal).
-_clean: Dirty = Dirty.CLEAN
+_clean: Dirty = Dirty.FALSE
 _partial: Dirty = Dirty.PARTIAL
 _full: Dirty = Dirty.FULL
