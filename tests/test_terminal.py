@@ -213,7 +213,7 @@ def test_unreferenced_terminal_is_finalized() -> None:
     # holding the finalize object does not keep the terminal alive, so watching
     # it go from alive to dead proves ghostty_terminal_free actually ran.
     term = Terminal(10, 3)
-    finalizer = term._finalizer
+    finalizer = term._finalizer  # pyright: ignore[reportPrivateUsage]
     assert finalizer.alive
     del term
     gc.collect()
