@@ -17,18 +17,23 @@ import cffi
 import gen_cdef
 import pytest
 from gen_cdef import (
-    DEFAULT_HEADERS,
     GeneratorError,
     Section,
+    discover_headers,
     generate_cdef,
     preprocess,
     split_sections,
     verify,
 )
-
-# _split_declarations is a private helper the test exercises directly; the
-# cross-module access of a private name is intentional here.
-from gen_cdef._generator import _split_declarations  # pyright: ignore
+from gen_cdef._generator import (
+    _split_declarations,  # pyright: ignore[reportPrivateUsage]
+    _strip_inline_definitions,  # pyright: ignore[reportPrivateUsage]
+)
+from gen_cdef.completeness import (
+    compiled_symbols,
+    missing_symbols,
+    surface_symbols,
+)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 INCLUDE_DIR = REPO_ROOT / "vendor" / "ghostty" / "include"
@@ -48,9 +53,7 @@ needs_vendor = pytest.mark.skipif(
 def test_generated_cdef_matches_committed() -> None:
     # The regeneration recipe is deterministic for the pinned commit: rerunning
     # it must reproduce the committed file byte for byte, or it is stale.
-    regenerated = generate_cdef(
-        include_dir=INCLUDE_DIR, headers=DEFAULT_HEADERS, commit=PINNED_COMMIT
-    )
+    regenerated = generate_cdef(include_dir=INCLUDE_DIR, commit=PINNED_COMMIT)
     assert regenerated == COMMITTED_CDEF.read_text()
 
 
@@ -83,6 +86,76 @@ def test_generated_cdef_covers_the_hard_constructs() -> None:
     assert "typedef bool (*GhosttySysDecodePngFn)(" in cdef
     # The visibility macro was stripped, not left verbatim.
     assert "GHOSTTY_API" not in cdef
+
+
+@needs_vendor
+def test_discovery_spans_the_full_surface_and_drops_non_contributors() -> None:
+    # Discovery is what makes the raw layer complete by construction: every vt
+    # header that contributes declarations is picked up, in dependency order.
+    headers = discover_headers(preprocess(INCLUDE_DIR), INCLUDE_DIR)
+    # A spread of domains across the surface, not just the tracer subset.
+    for header in (
+        "ghostty/vt/types.h",
+        "ghostty/vt/terminal.h",
+        "ghostty/vt/key/event.h",
+        "ghostty/vt/mouse/encoder.h",
+        "ghostty/vt/selection.h",
+        "ghostty/vt/modes.h",
+    ):
+        assert header in headers
+    # Aggregator headers (only #include others) and the wasm-gated header
+    # contribute no declarations, so they must not appear.
+    assert "ghostty/vt/key.h" not in headers
+    assert "ghostty/vt/mouse.h" not in headers
+    assert "ghostty/vt/wasm.h" not in headers
+    # Dependencies come before dependents (types.h underpins everything).
+    assert headers.index("ghostty/vt/types.h") < headers.index("ghostty/vt/terminal.h")
+
+
+@needs_vendor
+def test_full_surface_inline_helpers_are_prototypes_not_definitions() -> None:
+    # modes.h ships `static inline` helpers; the cdef keeps them callable as bare
+    # prototypes (a definition would make cffi reject the whole file).
+    cdef = generate_cdef(INCLUDE_DIR, commit=PINNED_COMMIT)
+    assert "GhosttyMode ghostty_mode_new(uint16_t value, bool ansi) ;" in cdef
+    assert "static" not in cdef
+    assert "inline" not in cdef
+
+
+def test_strip_inline_definitions_reduces_a_body_to_a_prototype() -> None:
+    body = "static inline int add(int a, int b) {\n    return a + b;\n}"
+    assert _strip_inline_definitions(body) == "int add(int a, int b) ;"
+
+
+def test_strip_inline_definitions_leaves_type_bodies_untouched() -> None:
+    # A struct body's `{` does not follow a `)`, so it must survive verbatim.
+    body = "typedef struct { int x; int y; } Point;"
+    assert _strip_inline_definitions(body) == body
+
+
+def test_discover_headers_reports_an_empty_surface(tmp_path: Path) -> None:
+    with pytest.raises(GeneratorError, match="no headers under"):
+        discover_headers('# 1 "other/thing.h"\nint x;\n', tmp_path)
+
+
+@needs_vendor
+def test_raw_layer_covers_every_exported_symbol() -> None:
+    # The completeness gate (issue #7): every exported vt header symbol must be
+    # callable from the compiled raw layer. The compiled extension is imported
+    # exactly as the idiomatic layer imports it.
+    from ghostty_vt import _raw
+
+    assert missing_symbols(INCLUDE_DIR, _raw.lib) == set()
+
+
+@needs_vendor
+def test_surface_symbols_are_a_subset_of_the_compiled_layer() -> None:
+    from ghostty_vt import _raw
+
+    surface = surface_symbols(INCLUDE_DIR)
+    # A representative sample spanning several domains is present.
+    assert {"ghostty_terminal_new", "ghostty_mode_new", "ghostty_build_info"} <= surface
+    assert surface <= compiled_symbols(_raw.lib)
 
 
 @needs_vendor

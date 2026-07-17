@@ -11,19 +11,11 @@ import argparse
 import sys
 from pathlib import Path
 
-from gen_cdef._generator import DEFAULT_HEADERS, GeneratorError, generate_cdef
-
-
-def _repo_root() -> Path:
-    """Locate the repo root by walking up to the pinned-commit file."""
-    for parent in Path(__file__).resolve().parents:
-        if (parent / "ghostty-commit.txt").is_file():
-            return parent
-    raise GeneratorError("could not locate ghostty-commit.txt from gen_cdef")
+from gen_cdef._generator import GeneratorError, generate_cdef, repo_root
 
 
 def main(argv: list[str] | None = None) -> int:
-    root = _repo_root()
+    root = repo_root()
     parser = argparse.ArgumentParser(
         prog="gen_cdef",
         description="Generate the libghostty-vt raw-layer cdef from vendored headers.",
@@ -45,12 +37,12 @@ def main(argv: list[str] | None = None) -> int:
         action="append",
         dest="headers",
         metavar="ghostty/vt/NAME.h",
-        help="Include-relative header to emit (repeatable; defaults to the "
-        "proven hard subset).",
+        help="Include-relative header to emit (repeatable; defaults to the full "
+        "surface discovered from the umbrella).",
     )
     args = parser.parse_args(argv)
 
-    headers = tuple(args.headers) if args.headers else DEFAULT_HEADERS
+    headers = tuple(args.headers) if args.headers else None
     commit_file = root / "ghostty-commit.txt"
     commit = commit_file.read_text().strip() if commit_file.is_file() else None
 
@@ -63,9 +55,10 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     args.output.write_text(cdef)
+    header_count = cdef.count("/* ---- ")
     print(
         f"gen-cdef: wrote {args.output} "
-        f"({len(headers)} header(s), pinned {commit or 'unknown'})"
+        f"({header_count} header(s), pinned {commit or 'unknown'})"
     )
     return 0
 

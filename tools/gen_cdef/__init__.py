@@ -7,23 +7,27 @@ Build-time tooling that lives outside the shipped ``ghostty_vt`` package. See
 from __future__ import annotations
 
 from gen_cdef._generator import (
-    DEFAULT_HEADERS,
     UMBRELLA,
+    VT_HEADER_PREFIX,
     GeneratorError,
     Section,
+    discover_headers,
     generate_cdef,
     preprocess,
+    repo_root,
     split_sections,
     verify,
 )
 
 __all__ = [
-    "DEFAULT_HEADERS",
     "UMBRELLA",
+    "VT_HEADER_PREFIX",
     "GeneratorError",
     "Section",
+    "discover_headers",
     "generate_cdef",
     "preprocess",
+    "repo_root",
     "split_sections",
     "verify",
 ]
