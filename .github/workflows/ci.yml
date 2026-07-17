@@ -123,11 +123,18 @@ jobs:
       #   - src/ghostty_vt/_cffi_build.py the offline build's copy of those options
       #   - pyproject.toml                the pinned `ziglang` toolchain version
       #   - runner.os / runner.arch       the build target
+      #   - env.DEVELOPER_DIR             the macOS SDK/Xcode the zig link uses
+      #   - env.ZIG_OPTIMIZE              the effective optimize mode (default
+      #                                   ReleaseFast); an env override changes
+      #                                   the produced lib, so it is keyed on
+      #                                   directly, not just via _lib.sh's default
       # uv.lock is deliberately not keyed on: it churns on unrelated dep bumps,
-      # and the ziglang version is already pinned exactly in pyproject.toml. If a
-      # workflow ever sets ZIG_OPTIMIZE, add it to both keys (its default lives in
-      # scripts/_lib.sh, already keyed on). The cache is a pure optimization: on a
-      # miss the build compiles from scratch and both caches are then populated.
+      # and the ziglang version is already pinned exactly in pyproject.toml. The
+      # cffi/setuptools output (the small C-to-.so compile in build/) is also not
+      # cached: it is cheap next to the zig build, and a cached .so is fragile
+      # across Python ABIs, so warm runs recompile only that thin layer. The
+      # cache is a pure optimization: on a miss the build compiles from scratch
+      # and both caches are then populated.
 
       # The zig global cache holds prefetched build deps and content-addressed
       # compiled objects. Restored before vendoring so `zig build --fetch` finds
@@ -136,7 +143,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: vendor/zig-cache
-          key: zig-cache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('ghostty-commit.txt', 'scripts/_lib.sh', 'src/ghostty_vt/_cffi_build.py', 'pyproject.toml') }}
+          key: zig-cache-${{ runner.os }}-${{ runner.arch }}-${{ env.DEVELOPER_DIR }}-${{ env.ZIG_OPTIMIZE || 'ReleaseFast' }}-${{ hashFiles('ghostty-commit.txt', 'scripts/_lib.sh', 'src/ghostty_vt/_cffi_build.py', 'pyproject.toml') }}
 
       # Fetch upstream at the pinned commit and prefetch zig build deps, so the
       # static libghostty-vt then builds without touching the network.
@@ -151,7 +158,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: vendor/dist
-          key: libghostty-vt-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('ghostty-commit.txt', 'scripts/_lib.sh', 'src/ghostty_vt/_cffi_build.py', 'pyproject.toml') }}
+          key: libghostty-vt-${{ runner.os }}-${{ runner.arch }}-${{ env.DEVELOPER_DIR }}-${{ env.ZIG_OPTIMIZE || 'ReleaseFast' }}-${{ hashFiles('ghostty-commit.txt', 'scripts/_lib.sh', 'src/ghostty_vt/_cffi_build.py', 'pyproject.toml') }}
 
       - name: Build the raw-layer extension
         run: just build
@@ -180,7 +187,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: vendor/zig-cache
-          key: zig-cache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('ghostty-commit.txt', 'scripts/_lib.sh', 'src/ghostty_vt/_cffi_build.py', 'pyproject.toml') }}
+          key: zig-cache-${{ runner.os }}-${{ runner.arch }}-${{ env.DEVELOPER_DIR }}-${{ env.ZIG_OPTIMIZE || 'ReleaseFast' }}-${{ hashFiles('ghostty-commit.txt', 'scripts/_lib.sh', 'src/ghostty_vt/_cffi_build.py', 'pyproject.toml') }}
 
       # Vendor + build so `pyright --verifytypes` can resolve the installed
       # package; the recipe's `build` dependency compiles the extension.
@@ -193,7 +200,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: vendor/dist
-          key: libghostty-vt-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('ghostty-commit.txt', 'scripts/_lib.sh', 'src/ghostty_vt/_cffi_build.py', 'pyproject.toml') }}
+          key: libghostty-vt-${{ runner.os }}-${{ runner.arch }}-${{ env.DEVELOPER_DIR }}-${{ env.ZIG_OPTIMIZE || 'ReleaseFast' }}-${{ hashFiles('ghostty-commit.txt', 'scripts/_lib.sh', 'src/ghostty_vt/_cffi_build.py', 'pyproject.toml') }}
 
       # Runs all five checkers (mypy, pyright, basedpyright, ty, pyrefly) plus
       # the Pylance-bundled pyright over the suite, and the verifytypes gate. The
