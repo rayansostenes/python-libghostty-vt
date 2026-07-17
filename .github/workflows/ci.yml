@@ -113,10 +113,45 @@ jobs:
       - name: Install just
         uses: extractions/setup-just@v2
 
+      # --- Build-artifact caching -------------------------------------------
+      # Warm runs skip the expensive zig build of the static libghostty-vt. Two
+      # artifacts are cached, both keyed on every input that changes the produced
+      # lib, so a hit can never link a stale one and any bump forces a cold,
+      # correct rebuild:
+      #   - ghostty-commit.txt            the pinned upstream source
+      #   - scripts/_lib.sh               the zig build options + ZIG_OPTIMIZE default
+      #   - src/ghostty_vt/_cffi_build.py the offline build's copy of those options
+      #   - pyproject.toml                the pinned `ziglang` toolchain version
+      #   - runner.os / runner.arch       the build target
+      # uv.lock is deliberately not keyed on: it churns on unrelated dep bumps,
+      # and the ziglang version is already pinned exactly in pyproject.toml. If a
+      # workflow ever sets ZIG_OPTIMIZE, add it to both keys (its default lives in
+      # scripts/_lib.sh, already keyed on). The cache is a pure optimization: on a
+      # miss the build compiles from scratch and both caches are then populated.
+
+      # The zig global cache holds prefetched build deps and content-addressed
+      # compiled objects. Restored before vendoring so `zig build --fetch` finds
+      # its deps and any rebuild reuses compiled objects.
+      - name: Cache the zig global cache
+        uses: actions/cache@v4
+        with:
+          path: vendor/zig-cache
+          key: zig-cache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('ghostty-commit.txt', 'scripts/_lib.sh', 'src/ghostty_vt/_cffi_build.py', 'pyproject.toml') }}
+
       # Fetch upstream at the pinned commit and prefetch zig build deps, so the
       # static libghostty-vt then builds without touching the network.
       - name: Vendor upstream source at the pinned commit
         run: just vendor
+
+      # Restored AFTER `just vendor`, which deletes vendor/dist on every run to
+      # avoid reusing a lib built against a stale commit. A hit here restores a
+      # lib built from identical inputs, so `just build` links it directly and
+      # skips the zig compile entirely.
+      - name: Cache the built static libghostty-vt
+        uses: actions/cache@v4
+        with:
+          path: vendor/dist
+          key: libghostty-vt-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('ghostty-commit.txt', 'scripts/_lib.sh', 'src/ghostty_vt/_cffi_build.py', 'pyproject.toml') }}
 
       - name: Build the raw-layer extension
         run: just build
@@ -139,10 +174,26 @@ jobs:
       - name: Install just
         uses: extractions/setup-just@v2
 
+      # Same two-artifact build cache as the `test` job (see the rationale and
+      # invalidation keys there). Shares the ubuntu cache entries with `test`.
+      - name: Cache the zig global cache
+        uses: actions/cache@v4
+        with:
+          path: vendor/zig-cache
+          key: zig-cache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('ghostty-commit.txt', 'scripts/_lib.sh', 'src/ghostty_vt/_cffi_build.py', 'pyproject.toml') }}
+
       # Vendor + build so `pyright --verifytypes` can resolve the installed
       # package; the recipe's `build` dependency compiles the extension.
       - name: Vendor upstream source at the pinned commit
         run: just vendor
+
+      # Restored after `just vendor` (which deletes vendor/dist); a hit lets the
+      # `build` dependency of `just typesafety` link the lib without a zig compile.
+      - name: Cache the built static libghostty-vt
+        uses: actions/cache@v4
+        with:
+          path: vendor/dist
+          key: libghostty-vt-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('ghostty-commit.txt', 'scripts/_lib.sh', 'src/ghostty_vt/_cffi_build.py', 'pyproject.toml') }}
 
       # Runs all five checkers (mypy, pyright, basedpyright, ty, pyrefly) plus
       # the Pylance-bundled pyright over the suite, and the verifytypes gate. The
