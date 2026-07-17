@@ -9,11 +9,11 @@ Domains are organized into submodules; flagship names are re-exported here at th
 top level. This release covers the ``build_info`` tracer domain, the foundation
 domains — errors, shared types, and color — the device domain's query callbacks,
 the ``terminal`` domain (create, feed, read visible text, resize, plus modes and
-screen-state queries), the ``kitty_graphics`` domain (inline-image state
-tracking), the ``key`` domain for keyboard input encoding, the standalone
-sequence parsers ``osc`` and ``sgr``, and the small encode/measure domains:
-paste, unicode, size report, color scheme, and focus. The remaining domains land
-in later milestones.
+screen-state queries), the ``selection`` domain (create, adjust, and extract text
+selections), the ``kitty_graphics`` domain (inline-image state tracking), the
+``key`` domain for keyboard input encoding, the standalone sequence parsers
+``osc`` and ``sgr``, and the small encode/measure domains: paste, unicode, size
+report, color scheme, and focus. The remaining domains land in later milestones.
 
 The sequence parsers are reached through their submodules, ``ghostty_vt.osc`` and
 ``ghostty_vt.sgr``, so their generic names (``parse``, ``Command``, ``Attribute``)
@@ -59,6 +59,7 @@ from ghostty_vt.mouse import (
     MouseFormat,
     MouseTracking,
 )
+from ghostty_vt.selection import Selection, SelectionAdjust, SelectionOrder
 from ghostty_vt.size_report import SizeReportStyle
 from ghostty_vt.terminal import Cursor, Mode, Screen, Terminal
 from ghostty_vt.types import Mods, Point, PointTag, SurfacePosition
@@ -99,6 +100,9 @@ __all__ = [
     "PointTag",
     "Rgb",
     "Screen",
+    "Selection",
+    "SelectionAdjust",
+    "SelectionOrder",
     "SizeReportStyle",
     "SurfacePosition",
     "Terminal",
