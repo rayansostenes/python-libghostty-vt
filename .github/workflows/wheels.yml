@@ -1,18 +1,30 @@
 name: Wheels
 
-# Build the full wheel matrix plus the sdist on demand and on every published
-# release. The release pipeline (issue #20) consumes these artifacts; here we
-# only build and verify them.
+# The release pipeline. Publishing a GitHub release builds the full wheel matrix
+# plus the sdist, verifies each artifact, and uploads them to PyPI via Trusted
+# Publishing (OIDC — no stored credentials). A manual workflow_dispatch run
+# rehearses the same build/verify path without publishing; setting the
+# `publish_testpypi` input additionally uploads to TestPyPI as a dry run.
 on:
   workflow_dispatch:
+    inputs:
+      publish_testpypi:
+        description: "Rehearse the release by uploading to TestPyPI"
+        type: boolean
+        default: false
   release:
     types: [published]
 
 # Auto-cancel superseded runs, except release builds: their artifacts feed the
-# release pipeline (#20) and must not be discarded by a later trigger on the tag.
+# publish jobs below and must not be discarded by a later trigger on the tag.
 concurrency:
   group: wheels-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name != 'release' }}
+
+# Least privilege by default: the build/verify jobs only read the repo. The
+# publish jobs widen this to the OIDC token they need (see their own blocks).
+permissions:
+  contents: read
 
 jobs:
   sdist:
@@ -45,6 +57,9 @@ jobs:
         with:
           name: sdist
           path: dist/*.tar.gz
+          # A build that produced no sdist must fail here, not silently publish
+          # an incomplete release: the default is to warn and upload nothing.
+          if-no-files-found: error
 
   wheels:
     name: wheels ${{ matrix.name }}
@@ -82,6 +97,9 @@ jobs:
         with:
           name: wheels-${{ matrix.name }}
           path: wheelhouse/*.whl
+          # A blocking wheel job that produced no wheel must fail rather than
+          # let the publish gather an incomplete set (default is warn-and-skip).
+          if-no-files-found: error
 
   # Windows is best-effort only: the job runs the same build but can never fail
   # the workflow (Windows is not a supported platform for v0.1).
@@ -104,7 +122,117 @@ jobs:
         env:
           CIBW_ARCHS: AMD64
 
+      # Named outside the `wheels-*` space so the publish gather never picks up
+      # this best-effort, unsupported wheel.
       - uses: actions/upload-artifact@v7
         with:
-          name: wheels-windows
+          name: windows-wheels
           path: wheelhouse/*.whl
+
+  # Record the pinned upstream commit in the GitHub release notes, so every
+  # published release states exactly which Ghostty commit its wheels were built
+  # from (the version alone doesn't reveal upstream drift). Idempotent: it only
+  # appends the footer when the commit isn't already in the body, so re-running
+  # or hand-authored notes that already mention it are left untouched.
+  release-notes:
+    name: stamp pinned commit into release notes
+    if: github.event_name == 'release'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Append the pinned commit to the release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          commit="$(tr -d '[:space:]' < ghostty-commit.txt)"
+          body="$(gh release view "$TAG" --json body --jq .body)"
+          if grep -qF "$commit" <<<"$body"; then
+            echo "Release notes already mention $commit; nothing to do."
+            exit 0
+          fi
+          {
+            printf '%s\n\n---\n' "$body"
+            printf 'Built from ghostty at pinned commit `%s`.\n' "$commit"
+          } | gh release edit "$TAG" --notes-file -
+
+  # Rehearsal: on a manual run with the input set, upload the freshly built
+  # artifacts to TestPyPI via Trusted Publishing. Never runs on a release, so it
+  # can't shadow the real publish.
+  publish-testpypi:
+    name: publish to TestPyPI (dry run)
+    if: github.event_name == 'workflow_dispatch' && inputs.publish_testpypi
+    needs: [sdist, wheels]
+    runs-on: ubuntu-24.04
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/python-libghostty-vt
+    permissions:
+      id-token: write
+    steps:
+      - name: Gather the sdist
+        uses: actions/download-artifact@v7
+        with:
+          name: sdist
+          path: dist
+
+      - name: Gather the blocking wheels
+        uses: actions/download-artifact@v7
+        with:
+          pattern: wheels-*
+          path: dist
+          merge-multiple: true
+
+      - name: Upload to TestPyPI
+        uses: pypa/gh-action-pypi-publish@v1.12.4
+        with:
+          repository-url: https://test.pypi.org/legacy/
+
+  # The real publish: on a published release, gather the sdist and every
+  # blocking wheel, assert the built version matches the release tag, and upload
+  # to PyPI via Trusted Publishing (OIDC — no API token is stored anywhere).
+  publish-pypi:
+    name: publish to PyPI
+    if: github.event_name == 'release'
+    needs: [sdist, wheels]
+    runs-on: ubuntu-24.04
+    environment:
+      name: pypi
+      url: https://pypi.org/p/python-libghostty-vt
+    permissions:
+      id-token: write
+    steps:
+      - name: Gather the sdist
+        uses: actions/download-artifact@v7
+        with:
+          name: sdist
+          path: dist
+
+      - name: Gather the blocking wheels
+        uses: actions/download-artifact@v7
+        with:
+          pattern: wheels-*
+          path: dist
+          merge-multiple: true
+
+      # Guard against tagging a release whose tag doesn't match the version
+      # baked into the package. PyPI would reject a mismatch anyway, but failing
+      # here is louder and happens before any upload.
+      - name: Assert the built version matches the release tag
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          sdist="$(ls dist/*.tar.gz)"
+          built="$(basename "$sdist" .tar.gz | sed -E 's/^.*-([0-9].*)$/\1/')"
+          want="${TAG#v}"
+          if [ "$built" != "$want" ]; then
+            echo "::error::built version '$built' does not match release tag '$want'"
+            exit 1
+          fi
+          echo "Built version '$built' matches release tag '$want'."
+
+      - name: Upload to PyPI
+        uses: pypa/gh-action-pypi-publish@v1.12.4

@@ -117,7 +117,7 @@ def _normalize(raw_path: str, include_dir: Path) -> str:
     path = Path(raw_path)
     try:
         return path.resolve().relative_to(include_dir.resolve()).as_posix()
-    except (ValueError, OSError):
+    except ValueError, OSError:
         return path.name
 
 

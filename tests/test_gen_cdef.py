@@ -25,7 +25,10 @@ from gen_cdef import (
     split_sections,
     verify,
 )
-from gen_cdef._generator import _split_declarations
+
+# _split_declarations is a private helper the test exercises directly; the
+# cross-module access of a private name is intentional here.
+from gen_cdef._generator import _split_declarations  # pyright: ignore
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 INCLUDE_DIR = REPO_ROOT / "vendor" / "ghostty" / "include"

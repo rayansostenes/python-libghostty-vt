@@ -67,6 +67,36 @@ Bumping upstream is a one-hash edit to `ghostty-commit.txt` followed by
 `just vendor`. The pinned zig version tracks upstream's minimum and is bumped
 via the `ziglang` pin in [`pyproject.toml`](pyproject.toml).
 
+## Releasing
+
+Releases are token-free: publishing a GitHub release runs the whole pipeline.
+The [Wheels workflow](.github/workflows/wheels.yml) builds the sdist and every
+blocking wheel (manylinux/musllinux x86_64 + aarch64, macOS arm64 + x86_64),
+verifies each by running the test suite against it, then uploads the sdist and
+all blocking wheels to PyPI via [Trusted Publishing](https://docs.pypi.org/trusted-publishers/)
+(OIDC — no API tokens are stored). The best-effort Windows wheel is never
+published.
+
+To cut a release:
+
+1. Bump `version` in [`pyproject.toml`](pyproject.toml) to the next 0.x value
+   (minor = API/upstream change, patch = fix). This is the single source of
+   truth: `ghostty_vt.__version__` is read back from the installed metadata, so
+   there is nothing else to edit.
+2. Create a GitHub release whose tag equals that version (a leading `v` is
+   allowed, e.g. `v0.1.0`). Draft the notes from
+   [`.github/release-notes-template.md`](.github/release-notes-template.md);
+   the workflow also appends the pinned commit automatically.
+3. Publishing the release builds, verifies, and uploads to PyPI. The publish job
+   fails before uploading if the built version doesn't match the tag.
+
+**Dry run:** trigger the Wheels workflow manually (`workflow_dispatch`) to build
+and verify without publishing. Set the `publish_testpypi` input to additionally
+upload to [TestPyPI](https://test.pypi.org/), rehearsing the full publish path.
+
+Both PyPI and TestPyPI must be configured with this repository and workflow as a
+trusted publisher, and the `pypi` / `testpypi` GitHub environments must exist.
+
 ## License
 
 MIT — see [LICENSE](LICENSE). libghostty-vt is likewise MIT-licensed; its notice

@@ -90,7 +90,10 @@ known-first-party = ["ghostty_vt"]
 # build shim (_cffi_build.py) — its C boundary is typed via the types-cffi
 # stubs. The _raw extension is typed by its hand-written _raw.pyi stub.
 strict = true
-mypy_path = "src"
+# `tools` mirrors pytest's pythonpath: tests/test_gen_cdef.py imports the
+# build-time cdef generator (tools/gen_cdef), so it must resolve under strict
+# type-checking too.
+mypy_path = ["src", "tools"]
 explicit_package_bases = true
 files = ["src", "tests"]
 
@@ -98,7 +101,9 @@ files = ["src", "tests"]
 typeCheckingMode = "strict"
 pythonVersion = "3.14"
 include = ["src", "tests"]
-extraPaths = ["src"]
+# `tools` mirrors pytest's pythonpath so tests importing the cdef generator
+# (tools/gen_cdef) resolve under strict type-checking.
+extraPaths = ["src", "tools"]
 # The raw layer is a generated extension typed entirely by its _raw.pyi stub; a
 # compiled module only exists after a build, and its presence must not change
 # type-check results. Treat the stub as the authoritative type source.
