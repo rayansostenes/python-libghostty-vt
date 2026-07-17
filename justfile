@@ -24,6 +24,10 @@ gen-cdef:
 build:
     uv run python setup.py build_ext --inplace
 
+# Check the built raw layer covers every exported vt header symbol (needs `just build`).
+completeness:
+    PYTHONPATH=tools uv run python -m gen_cdef.completeness
+
 # Lint with ruff.
 lint:
     uv run ruff check

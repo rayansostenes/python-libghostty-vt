@@ -29,6 +29,11 @@ from gen_cdef._generator import (
     _split_declarations,  # pyright: ignore[reportPrivateUsage]
     _strip_inline_definitions,  # pyright: ignore[reportPrivateUsage]
 )
+from gen_cdef.completeness import (
+    compiled_symbols,
+    missing_symbols,
+    surface_symbols,
+)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 INCLUDE_DIR = REPO_ROOT / "vendor" / "ghostty" / "include"
@@ -131,6 +136,26 @@ def test_strip_inline_definitions_leaves_type_bodies_untouched() -> None:
 def test_discover_headers_reports_an_empty_surface(tmp_path: Path) -> None:
     with pytest.raises(GeneratorError, match="no headers under"):
         discover_headers('# 1 "other/thing.h"\nint x;\n', tmp_path)
+
+
+@needs_vendor
+def test_raw_layer_covers_every_exported_symbol() -> None:
+    # The completeness gate (issue #7): every exported vt header symbol must be
+    # callable from the compiled raw layer. The compiled extension is imported
+    # exactly as the idiomatic layer imports it.
+    from ghostty_vt import _raw
+
+    assert missing_symbols(INCLUDE_DIR, _raw.lib) == set()
+
+
+@needs_vendor
+def test_surface_symbols_are_a_subset_of_the_compiled_layer() -> None:
+    from ghostty_vt import _raw
+
+    surface = surface_symbols(INCLUDE_DIR)
+    # A representative sample spanning several domains is present.
+    assert {"ghostty_terminal_new", "ghostty_mode_new", "ghostty_build_info"} <= surface
+    assert surface <= compiled_symbols(_raw.lib)
 
 
 @needs_vendor
