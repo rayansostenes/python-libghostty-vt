@@ -45,7 +45,7 @@ _PALETTE_SIZE = 256
 class Dirty(enum.Enum):
     """How much of the viewport changed since the render state was last clean."""
 
-    CLEAN = _lib.GHOSTTY_RENDER_STATE_DIRTY_FALSE
+    FALSE = _lib.GHOSTTY_RENDER_STATE_DIRTY_FALSE
     """Nothing changed; rendering can be skipped."""
 
     PARTIAL = _lib.GHOSTTY_RENDER_STATE_DIRTY_PARTIAL
@@ -206,21 +206,31 @@ class RenderState:
         # `terminal` is the bound terminal's liveness-checked handle getter; it
         # keeps the terminal alive and raises if it has been closed.
         self._terminal = terminal
-        state = _ffi.new("GhosttyRenderState *")
-        _result.check(
-            _lib.ghostty_render_state_new(_ffi.NULL, state),
-            "could not create render state",
-        )
-        iterator = _ffi.new("GhosttyRenderStateRowIterator *")
-        _result.check(
-            _lib.ghostty_render_state_row_iterator_new(_ffi.NULL, iterator),
-            "could not create render row iterator",
-        )
-        cells = _ffi.new("GhosttyRenderStateRowCells *")
-        _result.check(
-            _lib.ghostty_render_state_row_cells_new(_ffi.NULL, cells),
-            "could not create render row cells",
-        )
+        cleanup: list[Callable[[], object]] = []
+        try:
+            state = _ffi.new("GhosttyRenderState *")
+            _result.check(
+                _lib.ghostty_render_state_new(_ffi.NULL, state),
+                "could not create render state",
+            )
+            cleanup.append(lambda: _lib.ghostty_render_state_free(state[0]))
+            iterator = _ffi.new("GhosttyRenderStateRowIterator *")
+            _result.check(
+                _lib.ghostty_render_state_row_iterator_new(_ffi.NULL, iterator),
+                "could not create render row iterator",
+            )
+            cleanup.append(
+                lambda: _lib.ghostty_render_state_row_iterator_free(iterator[0])
+            )
+            cells = _ffi.new("GhosttyRenderStateRowCells *")
+            _result.check(
+                _lib.ghostty_render_state_row_cells_new(_ffi.NULL, cells),
+                "could not create render row cells",
+            )
+        except BaseException:  # pragma: no cover - native allocation failure
+            for free in reversed(cleanup):
+                free()
+            raise
         self._iterator_ptr = iterator
         self._cells_ptr = cells
         self._state: Any = state[0]
@@ -238,8 +248,9 @@ class RenderState:
     def update(self) -> None:
         """Refresh this render state from its terminal's current viewport.
 
-        Any :class:`RenderRow` snapshots from a previous :meth:`grid` become
-        stale; call :meth:`grid` again after updating.
+        Existing :class:`RenderRow` snapshots from a previous :meth:`grid` stay
+        valid; they are immutable copies. Call :meth:`grid` again to read the
+        refreshed viewport.
 
         Raises:
             UseAfterCloseError: If the render state or its terminal has been
