@@ -8,6 +8,10 @@ __pycache__/
 *.egg-info/
 build/
 dist/
+
+# Generated cffi raw-layer extension (built by `just build`)
+/src/ghostty_vt/_raw*.so
+/src/ghostty_vt/_raw*.pyd
 .pytest_cache/
 .ruff_cache/
 .coverage

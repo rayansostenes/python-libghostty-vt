@@ -13,8 +13,12 @@ vendor:
     ./scripts/fetch-vendor.sh
 
 # Build the static libghostty-vt from the vendored source (offline).
-build:
+build-lib:
     ./scripts/build-libghostty-vt.sh
+
+# Build the raw-layer cffi extension in place (builds the static lib if absent).
+build:
+    uv run python setup.py build_ext --inplace
 
 # Lint with ruff.
 lint:
@@ -34,4 +38,5 @@ test:
 
 # Remove vendored source and build outputs.
 clean:
-    rm -rf vendor
+    rm -rf vendor build dist src/*.egg-info
+    rm -f src/ghostty_vt/_raw*.so src/ghostty_vt/_raw*.pyd
