@@ -4,7 +4,36 @@ from __future__ import annotations
 
 import pytest
 
-from ghostty_vt import Point, PointTag, SurfacePosition
+from ghostty_vt import Mods, Point, PointTag, SurfacePosition
+
+
+def test_mods_none_is_the_empty_combination() -> None:
+    assert Mods.NONE.value == 0
+    assert not (Mods.SHIFT & Mods.NONE)
+
+
+def test_mods_compose_with_or() -> None:
+    combined = Mods.CTRL | Mods.SHIFT
+    assert Mods.CTRL in combined
+    assert Mods.SHIFT in combined
+    assert Mods.ALT not in combined
+
+
+def test_mods_members_have_distinct_bits() -> None:
+    members = [
+        Mods.SHIFT,
+        Mods.CTRL,
+        Mods.ALT,
+        Mods.SUPER,
+        Mods.CAPS_LOCK,
+        Mods.NUM_LOCK,
+        Mods.SHIFT_SIDE,
+        Mods.CTRL_SIDE,
+        Mods.ALT_SIDE,
+        Mods.SUPER_SIDE,
+    ]
+    values = {member.value for member in members}
+    assert len(values) == len(members)
 
 
 def test_point_tags_are_distinct() -> None:

@@ -40,7 +40,7 @@ from ghostty_vt.errors import (
 from ghostty_vt.focus import FocusEvent
 from ghostty_vt.size_report import SizeReportStyle
 from ghostty_vt.terminal import Terminal
-from ghostty_vt.types import Point, PointTag, SurfacePosition
+from ghostty_vt.types import Mods, Point, PointTag, SurfacePosition
 
 __all__ = [
     "GHOSTTY_COMMIT",
@@ -49,6 +49,7 @@ __all__ = [
     "FocusEvent",
     "GhosttyVtError",
     "InvalidValueError",
+    "Mods",
     "NoValueError",
     "OptimizeMode",
     "OutOfMemoryError",
