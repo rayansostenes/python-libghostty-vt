@@ -10,7 +10,6 @@ from __future__ import annotations
 import pytest
 
 from ghostty_vt import Rgb
-from ghostty_vt.errors import InvalidValueError
 from ghostty_vt.sgr import Attribute, AttributeKind, Underline, Unknown, parse
 
 
@@ -139,12 +138,12 @@ def test_disabling_underline_yields_the_none_style() -> None:
 
 
 def test_non_numeric_parameter_is_rejected() -> None:
-    with pytest.raises(InvalidValueError, match="invalid SGR parameter"):
+    with pytest.raises(ValueError, match="invalid SGR parameter"):
         parse("1;abc")
 
 
 def test_out_of_range_parameter_is_rejected() -> None:
-    with pytest.raises(InvalidValueError, match="out of range"):
+    with pytest.raises(ValueError, match="out of range"):
         parse("70000")
 
 

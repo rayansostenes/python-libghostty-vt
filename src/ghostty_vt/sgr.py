@@ -21,7 +21,6 @@ from typing import Any
 
 from ghostty_vt import _raw, _result
 from ghostty_vt.color import Rgb
-from ghostty_vt.errors import InvalidValueError
 
 __all__ = [
     "Attribute",
@@ -179,10 +178,10 @@ def _to_param(token: str) -> int:
         # An omitted parameter defaults to zero, as terminals treat `ESC[;m`.
         return 0
     if not (token.isascii() and token.isdigit()):
-        raise InvalidValueError(f"invalid SGR parameter: {token!r}")
+        raise ValueError(f"invalid SGR parameter: {token!r}")
     value = int(token)
     if value > _MAX_PARAM:
-        raise InvalidValueError(f"SGR parameter out of range (0-{_MAX_PARAM}): {value}")
+        raise ValueError(f"SGR parameter out of range (0-{_MAX_PARAM}): {value}")
     return value
 
 
@@ -224,8 +223,8 @@ def parse(params: str) -> tuple[Attribute, ...]:
         The parsed attributes, in the order the terminal would apply them.
 
     Raises:
-        InvalidValueError: If a parameter is not a non-negative decimal integer
-            or exceeds the 16-bit range terminals allow.
+        ValueError: If a parameter is not a non-negative decimal integer or
+            exceeds the 16-bit range terminals allow.
     """
     values, separators = _tokenize(params)
     handle = _ffi.new("GhosttySgrParser *")
