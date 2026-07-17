@@ -119,6 +119,13 @@ class MouseEvent:
     button: MouseButton | None = None
     mods: Mods = Mods.NONE
 
+    def __post_init__(self) -> None:
+        if self.button is None and self.action is not MouseAction.MOTION:
+            raise ValueError(
+                f"a {self.action.name.lower()} event requires a button; "
+                "None is only valid for a bare motion event"
+            )
+
 
 @dataclass(frozen=True, slots=True)
 class Geometry:
@@ -154,6 +161,16 @@ class Geometry:
         ):
             if value <= 0:
                 raise ValueError(f"{name} must be positive, got {value}")
+        for name, value in (
+            ("screen_width", self.screen_width),
+            ("screen_height", self.screen_height),
+            ("padding_top", self.padding_top),
+            ("padding_bottom", self.padding_bottom),
+            ("padding_left", self.padding_left),
+            ("padding_right", self.padding_right),
+        ):
+            if value < 0:
+                raise ValueError(f"{name} must be non-negative, got {value}")
 
 
 class MouseEncoder:
@@ -206,12 +223,31 @@ class MouseEncoder:
             format.value,
         )
         self._set_size(geometry)
+        self._any_button_pressed = any_button_pressed
         self._set_bool_opt(
             _lib.GHOSTTY_MOUSE_ENCODER_OPT_ANY_BUTTON_PRESSED, any_button_pressed
         )
         self._set_bool_opt(
             _lib.GHOSTTY_MOUSE_ENCODER_OPT_TRACK_LAST_CELL, track_last_cell
         )
+
+    @property
+    def any_button_pressed(self) -> bool:
+        """Whether any button is currently held.
+
+        Motion-tracking modes need this to report out-of-viewport motion (a drag
+        that leaves the surface). It is a live snapshot: update it as buttons are
+        pressed and released so a press-drag-out-release sequence reports
+        correctly. No single fixed value can, since a held button must report
+        out-of-viewport motion that a released button must not.
+        """
+        return self._any_button_pressed
+
+    @any_button_pressed.setter
+    def any_button_pressed(self, value: bool) -> None:
+        self._ensure_open()
+        self._set_bool_opt(_lib.GHOSTTY_MOUSE_ENCODER_OPT_ANY_BUTTON_PRESSED, value)
+        self._any_button_pressed = value
 
     def encode(self, event: MouseEvent) -> bytes:
         """Encode ``event`` into its escape sequence for the configured mode.
