@@ -61,9 +61,10 @@ def _query(tag: int, ctype: str) -> Any:
     # Returns the raw cffi cdata pointer; the C boundary is inherently dynamic.
     out = _ffi.new(ctype)
     result = _lib.ghostty_build_info(tag, out)
-    if result != _lib.GHOSTTY_SUCCESS:  # pragma: no cover
-        # Unreachable: every tag queried below is a compile-time-valid variant,
-        # for which the C API always reports success.
+    if result != _lib.GHOSTTY_SUCCESS:
+        # Every tag build_info() queries is a compile-time-valid variant for
+        # which the C API always succeeds; this guards a misuse of the private
+        # helper (see the invalid-tag test).
         raise RuntimeError(f"ghostty_build_info failed for tag {tag}: {result}")
     return out
 
