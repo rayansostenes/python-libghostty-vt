@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from ghostty_vt.build_info import _lib, _query
+from ghostty_vt.build_info import _lib, _query  # pyright: ignore[reportPrivateUsage]
 
 
 def test_query_raises_on_invalid_tag() -> None:

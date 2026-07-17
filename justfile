@@ -32,6 +32,17 @@ fmt:
 fmt-check:
     uv run ruff format --check
 
+# Type-check the source and tests with mypy (strict).
+mypy:
+    uv run mypy
+
+# Type-check the source and tests with pyright (strict).
+pyright:
+    uv run pyright
+
+# Run both strict type checkers over source and tests.
+typecheck: mypy pyright
+
 # Run the test suite.
 test:
     uv run pytest

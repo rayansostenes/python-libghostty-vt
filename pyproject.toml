@@ -42,6 +42,10 @@ dev = [
     "ruff>=0.14",
     "pytest>=8.4",
     "pytest-cov>=5.0",
+    # Strict type checkers gating the idiomatic layer and tests in PR CI. The
+    # broader five-checker typesafety suite lands separately (see issue #5).
+    "mypy>=1.15",
+    "pyright>=1.1.390",
     # Build backend, present in the dev env so `just build` can compile the
     # raw-layer extension in place without build isolation.
     "setuptools>=77",
@@ -68,6 +72,28 @@ select = [
 
 [tool.ruff.lint.isort]
 known-first-party = ["ghostty_vt"]
+
+[tool.mypy]
+# Strict over the idiomatic layer and the tests. The raw-layer cffi build shim
+# (_cffi_build.py) is build tooling over an untyped C boundary — excluded here
+# for the same reason coverage omits it. The _raw extension is typed by its
+# hand-written _raw.pyi stub.
+strict = true
+mypy_path = "src"
+explicit_package_bases = true
+files = ["src", "tests"]
+exclude = ['^src/ghostty_vt/_cffi_build\.py$']
+
+[tool.pyright]
+typeCheckingMode = "strict"
+pythonVersion = "3.14"
+include = ["src", "tests"]
+exclude = ["src/ghostty_vt/_cffi_build.py"]
+extraPaths = ["src"]
+# The raw layer is a generated extension typed entirely by its _raw.pyi stub; a
+# compiled module only exists after a build, and its presence must not change
+# type-check results. Treat the stub as the authoritative type source.
+reportMissingModuleSource = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
