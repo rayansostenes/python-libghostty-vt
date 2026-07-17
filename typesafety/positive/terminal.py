@@ -10,12 +10,11 @@ from typing import assert_type
 
 from ghostty_vt import Cursor, Mode, Screen, Terminal
 
-# Construction takes cell dimensions and yields the terminal type.
+# Construction takes cell dimensions and yields the terminal type; scrollback is
+# an optional keyword-only integer.
 term = Terminal(80, 24)
 assert_type(term, Terminal)
-
-# Scrollback is an optional keyword-only int.
-assert_type(Terminal(80, 24, scrollback=100), Terminal)
+assert_type(Terminal(80, 24, scrollback=1000), Terminal)
 
 # Dimensions read back as integers.
 assert_type(term.cols, int)

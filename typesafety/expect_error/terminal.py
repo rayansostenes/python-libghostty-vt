@@ -10,6 +10,7 @@ from ghostty_vt import Mode, Terminal
 
 Terminal()  # expect-error: missing cols and rows
 Terminal("80", 24)  # expect-error: cols must be an int
+Terminal(80, 24, scrollback="lots")  # expect-error: scrollback must be an int
 Terminal(80, 24, 100)  # expect-error: scrollback is keyword-only
 Terminal(80, 24).feed("text")  # expect-error: feed takes bytes, not str
 Terminal(80, 24).resize(100)  # expect-error: resize needs both dimensions
