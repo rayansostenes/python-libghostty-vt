@@ -8,7 +8,9 @@ catching the common base.
 
 The mapping from result codes to these classes lives in the private
 ``ghostty_vt._result`` helper; domains call it instead of inspecting result codes
-by hand.
+by hand. Failures that are not native result codes — such as using a resource
+after it has been closed — raise their own :class:`GhosttyVtError` subclass so
+callers still catch the common base.
 """
 
 from __future__ import annotations
@@ -19,6 +21,7 @@ __all__ = [
     "NoValueError",
     "OutOfMemoryError",
     "OutOfSpaceError",
+    "UseAfterCloseError",
 ]
 
 
@@ -40,3 +43,12 @@ class OutOfSpaceError(GhosttyVtError):
 
 class NoValueError(GhosttyVtError):
     """The requested value was not available (``GHOSTTY_NO_VALUE``)."""
+
+
+class UseAfterCloseError(GhosttyVtError):
+    """A closed resource was used again.
+
+    Resource-owning objects (such as :class:`~ghostty_vt.Terminal`) release their
+    native handle when closed; any further operation on them raises this instead
+    of reaching into freed memory.
+    """
