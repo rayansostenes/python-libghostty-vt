@@ -16,6 +16,10 @@ vendor:
 build-lib:
     ./scripts/build-libghostty-vt.sh
 
+# Regenerate the raw-layer cdef from the vendored headers (needs `just vendor`).
+gen-cdef:
+    PYTHONPATH=tools uv run python -m gen_cdef
+
 # Build the raw-layer cffi extension in place (builds the static lib if absent).
 build:
     uv run python setup.py build_ext --inplace
