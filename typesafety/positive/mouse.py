@@ -43,13 +43,45 @@ assert_type(encoder, MouseEncoder)
 assert_type(encoder.encode(event), bytes)
 assert_type(encoder.reset(), None)
 assert_type(encoder.close(), None)
+assert_type(encoder.any_button_pressed, bool)
+encoder.any_button_pressed = True
 with encoder as entered:
     assert_type(entered, MouseEncoder)
 
 # Every enum member is assignable to its enum type; dropping any one turns the
-# suite red.
-_action: MouseAction = MouseAction.MOTION
-_button: MouseButton = MouseButton.UNKNOWN
-_tracking: MouseTracking = MouseTracking.ANY
-_format: MouseFormat = MouseFormat.SGR_PIXELS
+# suite red. Assignment (not assert_type) is deliberate: a checker narrows a bare
+# member to its Literal type, so the enum-type annotation is what pins existence.
+_actions: list[MouseAction] = [
+    MouseAction.PRESS,
+    MouseAction.RELEASE,
+    MouseAction.MOTION,
+]
+_buttons: list[MouseButton] = [
+    MouseButton.UNKNOWN,
+    MouseButton.LEFT,
+    MouseButton.RIGHT,
+    MouseButton.MIDDLE,
+    MouseButton.FOUR,
+    MouseButton.FIVE,
+    MouseButton.SIX,
+    MouseButton.SEVEN,
+    MouseButton.EIGHT,
+    MouseButton.NINE,
+    MouseButton.TEN,
+    MouseButton.ELEVEN,
+]
+_trackings: list[MouseTracking] = [
+    MouseTracking.NONE,
+    MouseTracking.X10,
+    MouseTracking.NORMAL,
+    MouseTracking.BUTTON,
+    MouseTracking.ANY,
+]
+_formats: list[MouseFormat] = [
+    MouseFormat.X10,
+    MouseFormat.UTF8,
+    MouseFormat.SGR,
+    MouseFormat.URXVT,
+    MouseFormat.SGR_PIXELS,
+]
 _mods: Mods = Mods.CTRL | Mods.SHIFT

@@ -61,9 +61,24 @@ def test_mouse_event_defaults_to_no_button_and_no_mods() -> None:
 
 
 def test_mouse_event_is_immutable() -> None:
-    event = MouseEvent(MouseAction.PRESS, AT_CELL_11_3)
+    event = MouseEvent(MouseAction.PRESS, AT_CELL_11_3, MouseButton.LEFT)
     with pytest.raises(AttributeError):
         event.action = MouseAction.RELEASE  # type: ignore[misc]
+
+
+def test_press_without_a_button_is_rejected() -> None:
+    with pytest.raises(ValueError, match="a press event requires a button"):
+        MouseEvent(MouseAction.PRESS, AT_CELL_11_3)
+
+
+def test_release_without_a_button_is_rejected() -> None:
+    with pytest.raises(ValueError, match="a release event requires a button"):
+        MouseEvent(MouseAction.RELEASE, AT_CELL_11_3)
+
+
+def test_motion_without_a_button_is_allowed() -> None:
+    event = MouseEvent(MouseAction.MOTION, AT_CELL_11_3)
+    assert event.button is None
 
 
 def test_geometry_requires_positive_cell_width() -> None:
@@ -74,6 +89,29 @@ def test_geometry_requires_positive_cell_width() -> None:
 def test_geometry_requires_positive_cell_height() -> None:
     with pytest.raises(ValueError, match="cell_height must be positive"):
         Geometry(screen_width=800, screen_height=480, cell_width=10, cell_height=-1)
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "screen_width",
+        "screen_height",
+        "padding_top",
+        "padding_bottom",
+        "padding_left",
+        "padding_right",
+    ],
+)
+def test_geometry_rejects_negative_pixel_fields(field: str) -> None:
+    kwargs = {
+        "screen_width": 800,
+        "screen_height": 480,
+        "cell_width": 10,
+        "cell_height": 20,
+        field: -1,
+    }
+    with pytest.raises(ValueError, match=f"{field} must be non-negative"):
+        Geometry(**kwargs)
 
 
 def test_geometry_accepts_positive_cells_and_padding() -> None:
@@ -153,10 +191,38 @@ def test_sgr_pixels_reports_pixels_where_sgr_reports_cells() -> None:
     assert pixel_report == b"\x1b[<0;105;45M"
 
 
+def test_utf8_extends_coordinates_past_the_x10_single_byte_limit() -> None:
+    # At small cells UTF-8 and X10 coincide; only past the 95-column single-byte
+    # ceiling does UTF-8 diverge, emitting a two-byte sequence where X10 packs a
+    # raw high byte. A wide surface reaches column ~150 (pixel x 1495).
+    wide = Geometry(
+        screen_width=4000, screen_height=2000, cell_width=10, cell_height=20
+    )
+    far = SurfacePosition(1495.0, 45.0)
+    event = MouseEvent(MouseAction.PRESS, far, MouseButton.LEFT)
+    with MouseEncoder(
+        tracking=MouseTracking.NORMAL, format=MouseFormat.X10, geometry=wide
+    ) as x10:
+        x10_report = x10.encode(event)
+    with MouseEncoder(
+        tracking=MouseTracking.NORMAL, format=MouseFormat.UTF8, geometry=wide
+    ) as utf8:
+        utf8_report = utf8.encode(event)
+    assert x10_report == b"\x1b[M \xb6#"
+    assert utf8_report == b"\x1b[M \xc2\xb6#"
+    assert x10_report != utf8_report
+
+
 def test_unreported_event_encodes_to_empty_bytes() -> None:
     # X10 tracking reports presses only, so a release yields no output.
     with encoder(tracking=MouseTracking.X10) as enc:
         event = MouseEvent(MouseAction.RELEASE, AT_CELL_11_3, MouseButton.LEFT)
+        assert enc.encode(event) == b""
+
+
+def test_none_tracking_reports_nothing() -> None:
+    with encoder(tracking=MouseTracking.NONE) as enc:
+        event = MouseEvent(MouseAction.PRESS, AT_CELL_11_3, MouseButton.LEFT)
         assert enc.encode(event) == b""
 
 
@@ -191,6 +257,43 @@ def test_any_button_pressed_flag_is_accepted() -> None:
     with encoder(tracking=MouseTracking.ANY, any_button_pressed=True) as enc:
         event = MouseEvent(MouseAction.MOTION, AT_CELL_11_3)
         assert enc.encode(event).startswith(b"\x1b[<")
+
+
+# A press just left of the surface: column 0 is out of the viewport, so motion
+# tracking only reports it while a button is held.
+OUT_OF_VIEWPORT = SurfacePosition(-5.0, 45.0)
+
+
+def test_any_button_pressed_defaults_to_false() -> None:
+    with encoder(tracking=MouseTracking.ANY) as enc:
+        assert enc.any_button_pressed is False
+
+
+def test_out_of_viewport_press_needs_any_button_pressed() -> None:
+    event = MouseEvent(MouseAction.PRESS, OUT_OF_VIEWPORT, MouseButton.LEFT)
+    with encoder(tracking=MouseTracking.ANY) as enc:
+        assert enc.encode(event) == b""
+
+
+def test_any_button_pressed_is_mutable_across_events() -> None:
+    # A full press-drag-out-release sequence: no fixed flag value encodes it
+    # correctly, so the caller toggles the live button state between events.
+    press = MouseEvent(MouseAction.PRESS, AT_CELL_11_3, MouseButton.LEFT)
+    drag_out = MouseEvent(MouseAction.MOTION, OUT_OF_VIEWPORT, MouseButton.LEFT)
+    with encoder(tracking=MouseTracking.ANY) as enc:
+        assert enc.encode(press).startswith(b"\x1b[<")
+        enc.any_button_pressed = True
+        assert enc.any_button_pressed is True
+        assert enc.encode(drag_out).startswith(b"\x1b[<")
+        enc.any_button_pressed = False
+        assert enc.encode(drag_out) == b""
+
+
+def test_any_button_pressed_setter_after_close_raises() -> None:
+    enc = encoder()
+    enc.close()
+    with pytest.raises(GhosttyVtError, match="mouse encoder is closed"):
+        enc.any_button_pressed = True
 
 
 def test_encode_after_close_raises() -> None:
