@@ -8,6 +8,7 @@ The raw layer and the cffi callbacks are never invoked directly.
 from __future__ import annotations
 
 import gc
+import weakref
 
 import pytest
 
@@ -230,11 +231,24 @@ def test_responder_recovers_after_handler_exception() -> None:
 
 
 def test_only_first_handler_exception_is_raised() -> None:
+    calls: list[str] = []
+
+    def enquiry() -> bytes:
+        calls.append("enquiry")
+        raise ValueError("first")
+
+    def device_attributes() -> DeviceAttributes:
+        calls.append("device_attributes")
+        raise RuntimeError("second")
+
     with DeviceResponder() as responder:
-        responder.on_enquiry(_raising(ValueError("first")))
-        responder.on_device_attributes(_raising(RuntimeError("second")))
+        responder.on_enquiry(enquiry)
+        responder.on_device_attributes(device_attributes)
         with pytest.raises(ValueError, match="first"):
             responder.feed(ENQ_QUERY + DA1_QUERY)
+        # Only the first exception surfaces, but the second handler still ran
+        # and returned its default (ADR-0003: the contract is per-feed).
+        assert calls == ["enquiry", "device_attributes"]
 
 
 # --- lifetime --------------------------------------------------------------
@@ -268,8 +282,12 @@ def test_dropped_responder_is_finalized() -> None:
     responder = DeviceResponder()
     responder.on_enquiry(lambda: b"x")
     assert responder.feed(ENQ_QUERY) == b"x"
+    ref = weakref.ref(responder)
     del responder
     gc.collect()
+    # The responder holds the only strong refs to its cffi callbacks, so once
+    # it is collected nothing keeps the native terminal alive: no leak.
+    assert ref() is None
 
 
 def test_survives_gc_between_feeds() -> None:
@@ -280,6 +298,38 @@ def test_survives_gc_between_feeds() -> None:
         for _ in range(3):
             gc.collect()
             assert responder.feed(DA1_QUERY) == b"\x1b[?62;22c"
+
+
+# --- reentrancy ------------------------------------------------------------
+
+
+def test_handler_feeding_reentrantly_raises() -> None:
+    with DeviceResponder() as responder:
+
+        def reenter() -> bytes:
+            return responder.feed(ENQ_QUERY)
+
+        responder.on_enquiry(reenter)
+        with pytest.raises(RuntimeError, match="reentrantly"):
+            responder.feed(ENQ_QUERY)
+        # The responder stays usable after a blocked reentrant feed.
+        responder.on_enquiry(lambda: b"ok")
+        assert responder.feed(ENQ_QUERY) == b"ok"
+
+
+def test_handler_closing_during_feed_raises() -> None:
+    with DeviceResponder() as responder:
+
+        def close_mid_feed() -> bytes:
+            responder.close()
+            return b""
+
+        responder.on_enquiry(close_mid_feed)
+        with pytest.raises(RuntimeError, match="from within feed"):
+            responder.feed(ENQ_QUERY)
+        # close() was blocked, so the native terminal was never freed.
+        responder.on_enquiry(lambda: b"ok")
+        assert responder.feed(ENQ_QUERY) == b"ok"
 
 
 def _raising(error: Exception):  # type: ignore[no-untyped-def]

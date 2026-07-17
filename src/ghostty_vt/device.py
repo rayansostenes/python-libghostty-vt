@@ -190,6 +190,7 @@ class DeviceResponder:
         self._output = bytearray()
         self._response_buffers: list[Any] = []
         self._pending_error: BaseException | None = None
+        self._feeding = False
 
         terminal_out = _ffi.new("GhosttyTerminal *")
         options = _ffi.new(
@@ -234,7 +235,7 @@ class DeviceResponder:
 
         callbacks = {
             _lib.GHOSTTY_TERMINAL_OPT_WRITE_PTY: _ffi.callback(
-                "GhosttyTerminalWritePtyFn", write_pty
+                "GhosttyTerminalWritePtyFn", write_pty, onerror=self._capture_error
             ),
             _lib.GHOSTTY_TERMINAL_OPT_DEVICE_ATTRIBUTES: _ffi.callback(
                 "GhosttyTerminalDeviceAttributesFn",
@@ -249,8 +250,11 @@ class DeviceResponder:
             ),
         }
         for option, callback in callbacks.items():
-            _lib.ghostty_terminal_set(
-                self._terminal, option, _ffi.cast("void *", callback)
+            _result.check(
+                _lib.ghostty_terminal_set(
+                    self._terminal, option, _ffi.cast("void *", callback)
+                ),
+                "could not register device responder callback",
             )
         return callbacks
 
@@ -297,14 +301,22 @@ class DeviceResponder:
 
         Raises:
             ValueError: If the responder is closed.
+            RuntimeError: If called reentrantly from within a handler; the
+                native parser must not be re-entered while a feed is in flight.
             Exception: Whatever a handler raised while processing ``data``,
                 re-raised here after the native call returns.
         """
         self._ensure_open()
+        if self._feeding:
+            raise RuntimeError("cannot feed device responder reentrantly")
         self._output.clear()
         self._response_buffers.clear()
         self._pending_error = None
-        _lib.ghostty_terminal_vt_write(self._terminal, data, len(data))
+        self._feeding = True
+        try:
+            _lib.ghostty_terminal_vt_write(self._terminal, data, len(data))
+        finally:
+            self._feeding = False
         if self._pending_error is not None:
             error = self._pending_error
             self._pending_error = None
@@ -312,7 +324,14 @@ class DeviceResponder:
         return bytes(self._output)
 
     def close(self) -> None:
-        """Free the native terminal. Idempotent; further :meth:`feed` raises."""
+        """Free the native terminal. Idempotent; further :meth:`feed` raises.
+
+        Raises:
+            RuntimeError: If called from within a handler during :meth:`feed`;
+                the native terminal must not be freed while it is parsing.
+        """
+        if self._feeding:
+            raise RuntimeError("cannot close device responder from within feed")
         if self._finalizer.alive:
             self._finalizer()
         self._callbacks = {}
