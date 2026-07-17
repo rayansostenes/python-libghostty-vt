@@ -9,9 +9,9 @@ Domains are organized into submodules; flagship names are re-exported here at th
 top level. This release covers the ``build_info`` tracer domain, the foundation
 domains — errors, shared types, and color — the device domain's query callbacks,
 the core of the ``terminal`` domain (create, feed, read visible text, resize),
-the standalone sequence parsers ``osc`` and ``sgr``, and the small encode/measure
-domains: paste, unicode, size report, color scheme, and focus. The remaining
-domains land in later milestones.
+the ``key`` domain for keyboard input encoding, the standalone sequence parsers
+``osc`` and ``sgr``, and the small encode/measure domains: paste, unicode, size
+report, color scheme, and focus. The remaining domains land in later milestones.
 
 The sequence parsers are reached through their submodules, ``ghostty_vt.osc`` and
 ``ghostty_vt.sgr``, so their generic names (``parse``, ``Command``, ``Attribute``)
@@ -40,6 +40,14 @@ from ghostty_vt.errors import (
     UseAfterCloseError,
 )
 from ghostty_vt.focus import FocusEvent
+from ghostty_vt.key import (
+    Key,
+    KeyAction,
+    KeyEncoder,
+    KeyEvent,
+    KittyFlags,
+    OptionAsAlt,
+)
 from ghostty_vt.mouse import (
     MouseAction,
     MouseButton,
@@ -61,6 +69,11 @@ __all__ = [
     "FocusEvent",
     "GhosttyVtError",
     "InvalidValueError",
+    "Key",
+    "KeyAction",
+    "KeyEncoder",
+    "KeyEvent",
+    "KittyFlags",
     "Mods",
     "MouseAction",
     "MouseButton",
@@ -70,6 +83,7 @@ __all__ = [
     "MouseTracking",
     "NoValueError",
     "OptimizeMode",
+    "OptionAsAlt",
     "OutOfMemoryError",
     "OutOfSpaceError",
     "Point",
