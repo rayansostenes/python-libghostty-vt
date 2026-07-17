@@ -77,9 +77,10 @@ published.
 
 To cut a release:
 
-1. Bump `__version__` in [`src/ghostty_vt/__init__.py`](src/ghostty_vt/__init__.py)
-   and `version` in [`pyproject.toml`](pyproject.toml) to the same 0.x value
-   (minor = API/upstream change, patch = fix).
+1. Bump `version` in [`pyproject.toml`](pyproject.toml) to the next 0.x value
+   (minor = API/upstream change, patch = fix). This is the single source of
+   truth: `ghostty_vt.__version__` is read back from the installed metadata, so
+   there is nothing else to edit.
 2. Create a GitHub release whose tag equals that version (a leading `v` is
    allowed, e.g. `v0.1.0`). Draft the notes from
    [`.github/release-notes-template.md`](.github/release-notes-template.md);

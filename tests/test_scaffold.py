@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import tomllib
 from pathlib import Path
 
 import ghostty_vt
@@ -10,8 +11,9 @@ import ghostty_vt
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
-def test_version_is_exposed() -> None:
-    assert ghostty_vt.__version__ == "0.1.0.dev0"
+def test_version_matches_pyproject() -> None:
+    pyproject = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text())
+    assert ghostty_vt.__version__ == pyproject["project"]["version"]
 
 
 def test_pinned_commit_is_a_single_full_sha() -> None:

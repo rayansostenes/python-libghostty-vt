@@ -57,6 +57,9 @@ jobs:
         with:
           name: sdist
           path: dist/*.tar.gz
+          # A build that produced no sdist must fail here, not silently publish
+          # an incomplete release: the default is to warn and upload nothing.
+          if-no-files-found: error
 
   wheels:
     name: wheels ${{ matrix.name }}
@@ -94,6 +97,9 @@ jobs:
         with:
           name: wheels-${{ matrix.name }}
           path: wheelhouse/*.whl
+          # A blocking wheel job that produced no wheel must fail rather than
+          # let the publish gather an incomplete set (default is warn-and-skip).
+          if-no-files-found: error
 
   # Windows is best-effort only: the job runs the same build but can never fail
   # the workflow (Windows is not a supported platform for v0.1).

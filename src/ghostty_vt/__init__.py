@@ -12,6 +12,8 @@ through every layer; the remaining domains land in later milestones.
 
 from __future__ import annotations
 
+from importlib.metadata import version as _version
+
 from ghostty_vt.build_info import (
     GHOSTTY_COMMIT,
     BuildInfo,
@@ -27,4 +29,8 @@ __all__ = [
     "build_info",
 ]
 
-__version__ = "0.1.0.dev0"
+# Single source of truth: the version lives only in pyproject.toml and is read
+# back from the installed distribution metadata. Keeping a second hand-edited
+# literal here would let the runtime version drift from the published one — the
+# release version guard only checks the sdist/pyproject version, not this.
+__version__ = _version("python-libghostty-vt")
