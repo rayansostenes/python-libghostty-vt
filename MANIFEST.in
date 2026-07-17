@@ -10,6 +10,9 @@ recursive-include scripts *.sh
 # Vendored upstream source (headers + zig build inputs).
 graft vendor/ghostty
 prune vendor/ghostty/.git
+# Host build artifacts from an in-tree build; zig rebuilds these from the
+# prefetched package cache, so shipping them only bloats the sdist.
+prune vendor/ghostty/.zig-cache
 
 # Prefetched zig dependencies: ship only the source-package cache (p/). Zig
 # rebuilds every other cache directory from it, so the local build-artifact and
