@@ -44,11 +44,13 @@ ZIG_CACHE_DIR = VENDOR_DIR / "zig-cache"
 
 # Kept in lockstep with scripts/_lib.sh: the offline build must use the same
 # options the vendoring prefetch walked, or a lazy zig dependency could be
-# missing.
+# missing. Like _lib.sh, the optimize mode honors the ZIG_OPTIMIZE override and
+# defaults to ReleaseFast.
+_OPTIMIZE = os.environ.get("ZIG_OPTIMIZE", "ReleaseFast")
 _ZIG_BUILD_OPTS = (
     "-Demit-lib-vt=true",
     "-Demit-xcframework=false",
-    "-Doptimize=ReleaseFast",
+    f"-Doptimize={_OPTIMIZE}",
 )
 
 # Platform-specific names of the static library emitted by upstream's build.zig.
