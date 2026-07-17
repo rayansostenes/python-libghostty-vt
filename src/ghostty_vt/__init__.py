@@ -38,6 +38,14 @@ from ghostty_vt.errors import (
     UseAfterCloseError,
 )
 from ghostty_vt.focus import FocusEvent
+from ghostty_vt.mouse import (
+    MouseAction,
+    MouseButton,
+    MouseEncoder,
+    MouseEvent,
+    MouseFormat,
+    MouseTracking,
+)
 from ghostty_vt.size_report import SizeReportStyle
 from ghostty_vt.terminal import Terminal
 from ghostty_vt.types import Mods, Point, PointTag, SurfacePosition
@@ -50,6 +58,12 @@ __all__ = [
     "GhosttyVtError",
     "InvalidValueError",
     "Mods",
+    "MouseAction",
+    "MouseButton",
+    "MouseEncoder",
+    "MouseEvent",
+    "MouseFormat",
+    "MouseTracking",
     "NoValueError",
     "OptimizeMode",
     "OutOfMemoryError",
