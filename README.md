@@ -16,7 +16,7 @@ Idiomatic, fully typed Python bindings for
 Early tracer bullet: a complete path through every layer for a single tiny
 domain. A cffi API-mode extension (per [ADR 0001](docs/adr/0001-cffi-api-mode-bindings.md))
 statically links the zig-built libghostty-vt and exposes its `build_info` domain
-through a private raw layer and a typed idiomatic wrapper. The remaining domains
+through a private raw layer and a typed idiomatic layer. The remaining domains
 and the full raw surface land in later milestones.
 
 ```python
