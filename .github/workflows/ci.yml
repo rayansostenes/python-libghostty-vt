@@ -58,3 +58,30 @@ jobs:
 
       - name: Tests with 100% coverage gate
         run: just test
+
+  typesafety:
+    name: typesafety
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv (with Python 3.14)
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.14"
+          enable-cache: true
+
+      - name: Install just
+        uses: extractions/setup-just@v2
+
+      # Vendor + build so `pyright --verifytypes` can resolve the installed
+      # package; the recipe's `build` dependency compiles the extension.
+      - name: Vendor upstream source at the pinned commit
+        run: just vendor
+
+      # Runs all five checkers (mypy, pyright, basedpyright, ty, pyrefly) plus
+      # the Pylance-bundled pyright over the suite, and the verifytypes gate. The
+      # checkers are resolved at latest stable by uv at run time, so a checker
+      # release can turn this red without a code change (accepted per the spec).
+      - name: Typesafety suite
+        run: just typesafety

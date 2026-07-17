@@ -63,6 +63,10 @@ dev = [
 target-version = "py314"
 line-length = 88
 src = ["src", "tests"]
+# The typesafety suite is never executed and holds deliberate misuse (bare
+# expressions, wrong-typed calls) that only the type checkers should judge;
+# linting or reformatting it would fight its purpose.
+extend-exclude = ["typesafety"]
 
 [tool.ruff.lint]
 select = [

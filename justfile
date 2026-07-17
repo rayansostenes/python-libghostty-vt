@@ -47,6 +47,12 @@ pyright:
 # Run both strict type checkers over source and tests.
 typecheck: mypy pyright
 
+# Run the typesafety suite: five checkers + Pylance pyright + verifytypes.
+# Depends on `build` so verifytypes resolves the installed package (needs `just
+# vendor` first). The five file-checkers are fetched at latest stable by uv.
+typesafety: build
+    uv run python scripts/typesafety.py
+
 # Run the test suite.
 test:
     uv run pytest
