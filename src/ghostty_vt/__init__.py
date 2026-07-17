@@ -9,11 +9,14 @@ Domains are organized into submodules; flagship names are re-exported here at th
 top level. This release covers the ``build_info`` tracer domain, the foundation
 domains — errors, shared types, and color — the device domain's query callbacks,
 the ``terminal`` domain (create, feed, read visible text, resize, plus modes and
-screen-state queries), the ``selection`` domain (create, adjust, and extract text
-selections), the ``kitty_graphics`` domain (inline-image state tracking), the
-``key`` domain for keyboard input encoding, the standalone sequence parsers
-``osc`` and ``sgr``, and the small encode/measure domains: paste, unicode, size
-report, color scheme, and focus. The remaining domains land in later milestones.
+screen-state queries), the screen-inspection domains built on it — ``style``,
+``grid_ref`` (per-cell snapshots and tracked references), ``render`` (viewport
+render state), and ``formatter`` (screen text extraction) — the ``selection``
+domain (create, adjust, and extract text selections), the ``kitty_graphics``
+domain (inline-image state tracking), the ``key`` domain for keyboard input
+encoding, the standalone sequence parsers ``osc`` and ``sgr``, and the small
+encode/measure domains: paste, unicode, size report, color scheme, and focus.
+The remaining domains land in later milestones.
 
 The sequence parsers are reached through their submodules, ``ghostty_vt.osc`` and
 ``ghostty_vt.sgr``, so their generic names (``parse``, ``Command``, ``Attribute``)
@@ -42,6 +45,14 @@ from ghostty_vt.errors import (
     UseAfterCloseError,
 )
 from ghostty_vt.focus import FocusEvent
+from ghostty_vt.formatter import Format
+from ghostty_vt.grid_ref import (
+    Cell,
+    CellWidth,
+    GridRef,
+    SemanticContent,
+    TrackedGridRef,
+)
 from ghostty_vt.key import (
     Key,
     KeyAction,
@@ -59,20 +70,33 @@ from ghostty_vt.mouse import (
     MouseFormat,
     MouseTracking,
 )
+from ghostty_vt.render import (
+    Dirty,
+    RenderCell,
+    RenderColors,
+    RenderRow,
+    RenderState,
+)
 from ghostty_vt.selection import Selection, SelectionAdjust, SelectionOrder
 from ghostty_vt.size_report import SizeReportStyle
+from ghostty_vt.style import Style, StyleColor, Underline
 from ghostty_vt.terminal import Cursor, Mode, Screen, Terminal
 from ghostty_vt.types import Mods, Point, PointTag, SurfacePosition
 
 __all__ = [
     "GHOSTTY_COMMIT",
     "BuildInfo",
+    "Cell",
+    "CellWidth",
     "ColorScheme",
     "Cursor",
     "DeviceAttributes",
     "DeviceResponder",
+    "Dirty",
     "FocusEvent",
+    "Format",
     "GhosttyVtError",
+    "GridRef",
     "Image",
     "ImageFormat",
     "InvalidValueError",
@@ -98,14 +122,23 @@ __all__ = [
     "Placement",
     "Point",
     "PointTag",
+    "RenderCell",
+    "RenderColors",
+    "RenderRow",
+    "RenderState",
     "Rgb",
     "Screen",
     "Selection",
     "SelectionAdjust",
     "SelectionOrder",
+    "SemanticContent",
     "SizeReportStyle",
+    "Style",
+    "StyleColor",
     "SurfacePosition",
     "Terminal",
+    "TrackedGridRef",
+    "Underline",
     "UseAfterCloseError",
     "__version__",
     "build_info",
