@@ -27,4 +27,4 @@ __all__ = [
     "build_info",
 ]
 
-__version__ = "0.1.0.dev0"
+__version__: str = "0.1.0.dev0"
