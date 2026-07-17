@@ -17,6 +17,7 @@ from typing import Any, Final, Self
 
 from ghostty_vt import _raw, _result
 from ghostty_vt.errors import UseAfterCloseError
+from ghostty_vt.kitty_graphics import KittyGraphics
 
 __all__ = ["Terminal"]
 
@@ -166,6 +167,16 @@ class Terminal:
         _check_dimension("rows", rows)
         result = _lib.ghostty_terminal_resize(handle, cols, rows, 0, 0)
         _result.check(result, "could not resize terminal")
+
+    def kitty_graphics(self) -> KittyGraphics:
+        """Return a live view of this terminal's Kitty graphics image storage.
+
+        The view reads the terminal's storage on each query, so a single view
+        reflects images and placements transmitted, replaced, or deleted by later
+        feeds. Its queries raise :class:`~ghostty_vt.UseAfterCloseError` once the
+        terminal is closed. The storage is per active screen.
+        """
+        return KittyGraphics(self._handle)
 
     def close(self) -> None:
         """Release the native terminal handle.

@@ -9,9 +9,10 @@ Domains are organized into submodules; flagship names are re-exported here at th
 top level. This release covers the ``build_info`` tracer domain, the foundation
 domains — errors, shared types, and color — the device domain's query callbacks,
 the core of the ``terminal`` domain (create, feed, read visible text, resize),
-the ``key`` domain for keyboard input encoding, the standalone sequence parsers
-``osc`` and ``sgr``, and the small encode/measure domains: paste, unicode, size
-report, color scheme, and focus. The remaining domains land in later milestones.
+the ``kitty_graphics`` domain (inline-image state tracking), the ``key`` domain
+for keyboard input encoding, the standalone sequence parsers ``osc`` and ``sgr``,
+and the small encode/measure domains: paste, unicode, size report, color scheme,
+and focus. The remaining domains land in later milestones.
 
 The sequence parsers are reached through their submodules, ``ghostty_vt.osc`` and
 ``ghostty_vt.sgr``, so their generic names (``parse``, ``Command``, ``Attribute``)
@@ -48,6 +49,7 @@ from ghostty_vt.key import (
     KittyFlags,
     OptionAsAlt,
 )
+from ghostty_vt.kitty_graphics import Image, ImageFormat, KittyGraphics, Placement
 from ghostty_vt.mouse import (
     MouseAction,
     MouseButton,
@@ -68,12 +70,15 @@ __all__ = [
     "DeviceResponder",
     "FocusEvent",
     "GhosttyVtError",
+    "Image",
+    "ImageFormat",
     "InvalidValueError",
     "Key",
     "KeyAction",
     "KeyEncoder",
     "KeyEvent",
     "KittyFlags",
+    "KittyGraphics",
     "Mods",
     "MouseAction",
     "MouseButton",
@@ -86,6 +91,7 @@ __all__ = [
     "OptionAsAlt",
     "OutOfMemoryError",
     "OutOfSpaceError",
+    "Placement",
     "Point",
     "PointTag",
     "Rgb",
