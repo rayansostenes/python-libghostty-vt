@@ -24,7 +24,13 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from gen_cdef._generator import _LINE_MARKER, UMBRELLA, preprocess, repo_root
+from gen_cdef._generator import (
+    UMBRELLA,
+    discover_headers,
+    preprocess,
+    repo_root,
+    split_sections,
+)
 
 # A function declaration/definition site: a lowercase ``ghostty_*`` name directly
 # before a ``(``. Exported functions and the header-only inline helpers match;
@@ -34,11 +40,19 @@ _SYMBOL = re.compile(r"\b(ghostty_[a-z0-9_]+)\s*\(")
 
 
 def surface_symbols(include_dir: Path, umbrella: str = UMBRELLA) -> set[str]:
-    """Return the exported ``ghostty_*`` function names of the vt header surface."""
+    """Return the exported ``ghostty_*`` function names of the vt header surface.
+
+    The surface is scoped to exactly the headers the generator emits into the
+    cdef — ``discover_headers`` + ``split_sections`` apply the ``VT_HEADER_PREFIX``
+    filter — so the completeness check and the generator can never disagree about
+    what "the vt surface" is: a symbol only counts here if the generator would
+    have bound it. Symbols the generator excludes by prefix (e.g. a future vt
+    header pulling in the separate ``ghostty.h`` app API) are excluded here too.
+    """
     preprocessed = preprocess(include_dir, umbrella)
-    body = "\n".join(
-        line for line in preprocessed.splitlines() if not _LINE_MARKER.match(line)
-    )
+    headers = discover_headers(preprocessed, include_dir)
+    sections = split_sections(preprocessed, include_dir, headers)
+    body = "\n".join(section.body for section in sections)
     return {match.group(1) for match in _SYMBOL.finditer(body)}
 
 
