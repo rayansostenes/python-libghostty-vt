@@ -15,6 +15,7 @@ from ghostty_vt import (
     NoValueError,
     OutOfMemoryError,
     OutOfSpaceError,
+    UseAfterCloseError,
 )
 
 # Constructing the root error yields the root type.
@@ -25,6 +26,7 @@ _invalid: GhosttyVtError = InvalidValueError()
 _out_of_memory: GhosttyVtError = OutOfMemoryError()
 _out_of_space: GhosttyVtError = OutOfSpaceError()
 _no_value: GhosttyVtError = NoValueError()
+_use_after_close: GhosttyVtError = UseAfterCloseError()
 
 # The mixed-in standard-library bases are part of the public contract.
 _as_value_error: ValueError = InvalidValueError()
