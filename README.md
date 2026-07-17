@@ -50,4 +50,4 @@ via the `ziglang` pin in [`pyproject.toml`](pyproject.toml).
 ## License
 
 MIT — see [LICENSE](LICENSE). libghostty-vt is likewise MIT-licensed; its notice
-travels with the vendored source and the built artifacts.
+is retained alongside the vendored source (`vendor/ghostty/LICENSE`).
