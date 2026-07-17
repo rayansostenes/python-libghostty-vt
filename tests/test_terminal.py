@@ -8,7 +8,6 @@ raw layer and the C boundary are never touched directly.
 from __future__ import annotations
 
 import gc
-import weakref
 from collections.abc import Callable
 
 import pytest
@@ -38,6 +37,23 @@ def test_feed_is_incremental() -> None:
         term.feed(b"hel")
         term.feed(b"lo")
         assert term.visible_text() == "hello"
+
+
+def test_feed_resumes_an_escape_sequence_split_across_calls() -> None:
+    with Terminal(20, 3) as term:
+        # An SGR sequence and its styled text split mid-sequence: the stream
+        # parser must hold state between feeds, not restart on each call.
+        term.feed(b"\x1b[31")
+        term.feed(b"mred\x1b[0m")
+        assert term.visible_text() == "red"
+
+
+def test_feed_resumes_a_utf8_codepoint_split_across_calls() -> None:
+    with Terminal(20, 3) as term:
+        encoded = "é".encode()
+        term.feed(encoded[:1])
+        term.feed(encoded[1:] + b"x")
+        assert term.visible_text() == "éx"
 
 
 def test_feed_empty_bytes_is_a_noop() -> None:
@@ -170,6 +186,22 @@ def test_operations_after_close_raise(
         operation(term)
 
 
+def test_resize_on_closed_terminal_checks_liveness_before_dimensions() -> None:
+    # A closed terminal reports its closed state even when the dimensions are
+    # also invalid: liveness is validated before the range check.
+    term = Terminal(10, 3)
+    term.close()
+    with pytest.raises(UseAfterCloseError, match="closed Terminal"):
+        term.resize(0, 24)
+
+
+def test_enter_on_closed_terminal_raises() -> None:
+    term = Terminal(10, 3)
+    term.close()
+    with pytest.raises(UseAfterCloseError, match="closed Terminal"), term:
+        pass
+
+
 def test_use_after_close_is_a_ghostty_vt_error() -> None:
     from ghostty_vt import GhosttyVtError
 
@@ -177,8 +209,12 @@ def test_use_after_close_is_a_ghostty_vt_error() -> None:
 
 
 def test_unreferenced_terminal_is_finalized() -> None:
+    # Observe the terminal's own native-freeing finalizer, not an unrelated one:
+    # holding the finalize object does not keep the terminal alive, so watching
+    # it go from alive to dead proves ghostty_terminal_free actually ran.
     term = Terminal(10, 3)
-    finalizer = weakref.finalize(term, lambda: None)
+    finalizer = term._finalizer
+    assert finalizer.alive
     del term
     gc.collect()
     assert not finalizer.alive
