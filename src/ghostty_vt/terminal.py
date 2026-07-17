@@ -19,11 +19,19 @@ import enum
 import weakref
 from dataclasses import dataclass
 from types import TracebackType
-from typing import Any, Final, Self
+from typing import TYPE_CHECKING, Any, Final, Self
 
-from ghostty_vt import _raw, _result
+from ghostty_vt import _native, _raw, _result
+from ghostty_vt import grid_ref as _grid_ref
+from ghostty_vt import render as _render
 from ghostty_vt.errors import UseAfterCloseError
+from ghostty_vt.formatter import Format
 from ghostty_vt.kitty_graphics import KittyGraphics
+
+if TYPE_CHECKING:
+    from ghostty_vt.grid_ref import GridRef, TrackedGridRef
+    from ghostty_vt.render import RenderState
+    from ghostty_vt.types import Point
 
 __all__ = ["Cursor", "Mode", "Screen", "Terminal"]
 
@@ -207,40 +215,6 @@ class Cursor:
     pending_wrap: bool
 
 
-def _visible_text(handle: Any) -> str:
-    # Format the active screen as plain text via a transient formatter. Trailing
-    # whitespace on non-blank lines is trimmed so the result reads as the text a
-    # user would see; soft-wrapped lines are left wrapped as displayed.
-    options = _ffi.new("GhosttyFormatterTerminalOptions *")
-    options.size = _ffi.sizeof("GhosttyFormatterTerminalOptions")
-    options.emit = _lib.GHOSTTY_FORMATTER_FORMAT_PLAIN
-    options.unwrap = False
-    options.trim = True
-    options.extra.size = _ffi.sizeof("GhosttyFormatterTerminalExtra")
-    options.extra.screen.size = _ffi.sizeof("GhosttyFormatterScreenExtra")
-    options.selection = _ffi.NULL
-
-    out_formatter = _ffi.new("GhosttyFormatter *")
-    result = _lib.ghostty_formatter_terminal_new(
-        _ffi.NULL, out_formatter, handle, options[0]
-    )
-    _result.check(result, "could not create terminal formatter")
-    formatter = out_formatter[0]
-    try:
-        out_ptr = _ffi.new("uint8_t **")
-        out_len = _ffi.new("size_t *")
-        result = _lib.ghostty_formatter_format_alloc(
-            formatter, _ffi.NULL, out_ptr, out_len
-        )
-        _result.check(result, "could not format terminal contents")
-        try:
-            return bytes(_ffi.buffer(out_ptr[0], out_len[0])).decode("utf-8")
-        finally:
-            _lib.ghostty_free(_ffi.NULL, out_ptr[0], out_len[0])
-    finally:
-        _lib.ghostty_formatter_free(formatter)
-
-
 class Terminal:
     """A stateful emulated terminal: bytes are fed in, screen state is read out.
 
@@ -390,7 +364,37 @@ class Terminal:
         Raises:
             UseAfterCloseError: If the terminal has been closed.
         """
-        return _visible_text(self._handle())
+        return _native.format_screen(
+            self._handle(), Format.PLAIN.value, unwrap=False, trim=True
+        )
+
+    def format(
+        self,
+        *,
+        emit: Format = Format.PLAIN,
+        unwrap: bool = False,
+        trim: bool = True,
+    ) -> str:
+        """Serialize the active screen to text.
+
+        This is the formatter domain's extraction entry point: it renders the
+        visible screen region as text in the requested format.
+
+        Args:
+            emit: The output format (plain text, VT sequences, or HTML).
+            unwrap: Whether to join soft-wrapped lines back into single lines.
+            trim: Whether to trim trailing whitespace from non-blank lines and
+                drop trailing blank lines.
+
+        Returns:
+            The formatted screen contents.
+
+        Raises:
+            UseAfterCloseError: If the terminal has been closed.
+        """
+        return _native.format_screen(
+            self._handle(), emit.value, unwrap=unwrap, trim=trim
+        )
 
     def get_mode(self, mode: Mode) -> bool:
         """Return whether ``mode`` is currently set.
@@ -512,6 +516,46 @@ class Terminal:
         elif row is not None:
             behavior.value.row = row
         _lib.ghostty_terminal_scroll_viewport(handle, behavior[0])
+
+    def grid_ref(self, point: Point) -> GridRef:
+        """Resolve ``point`` to an untracked :class:`~ghostty_vt.GridRef`.
+
+        The returned reference is a snapshot valid only until the next terminal
+        mutation; read from it immediately.
+
+        Raises:
+            UseAfterCloseError: If the terminal has been closed.
+            InvalidValueError: If the point is out of bounds.
+        """
+        return _grid_ref.resolve(self._handle, point)
+
+    def track_grid_ref(self, point: Point) -> TrackedGridRef:
+        """Resolve ``point`` to a tracked :class:`~ghostty_vt.TrackedGridRef`.
+
+        The returned reference follows its cell across scrolling, reflow, and
+        scrollback pruning. It owns a native handle and must be closed (use it as
+        a context manager) or left to its finalizer.
+
+        Raises:
+            UseAfterCloseError: If the terminal has been closed.
+            InvalidValueError: If the point is out of bounds.
+            OutOfMemoryError: If the tracked reference could not be allocated.
+        """
+        return _grid_ref.track(self._handle, point)
+
+    def render_state(self) -> RenderState:
+        """Create a :class:`~ghostty_vt.RenderState` bound to this terminal.
+
+        The render state stays paired with this terminal; call
+        :meth:`~ghostty_vt.RenderState.update` to refresh it and then read the
+        per-cell render data. It owns native resources and is a context manager.
+
+        Raises:
+            UseAfterCloseError: If the terminal has been closed.
+            OutOfMemoryError: If the render state could not be allocated.
+        """
+        self._handle()
+        return _render.RenderState(self._handle)
 
     def close(self) -> None:
         """Release the native terminal handle.
