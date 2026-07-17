@@ -8,6 +8,14 @@ default:
 setup:
     uv sync
 
+# Fetch upstream at the pinned commit and prefetch zig deps (needs network).
+vendor:
+    ./scripts/fetch-vendor.sh
+
+# Build the static libghostty-vt from the vendored source (offline).
+build:
+    ./scripts/build-libghostty-vt.sh
+
 # Lint with ruff.
 lint:
     uv run ruff check
@@ -23,3 +31,7 @@ fmt-check:
 # Run the test suite.
 test:
     uv run pytest
+
+# Remove vendored source and build outputs.
+clean:
+    rm -rf vendor
