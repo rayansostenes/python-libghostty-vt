@@ -42,7 +42,9 @@ idiomatic conventions (snake_case, `GhosttyVtError` hierarchy, context managers,
 pip install python-libghostty-vt   # or: uv add python-libghostty-vt
 ```
 
-Prebuilt wheels ship for the platforms below — no zig, no C compiler. Requires
+Prebuilt wheels ship for the supported platforms below — no zig, no C compiler
+(Windows is best-effort and unsupported: no wheel is published, so it installs
+from the source distribution). Requires
 **Python 3.14 or newer**; the API targets modern typing and idioms with no
 legacy shims.
 
@@ -53,13 +55,15 @@ legacy shims.
 | Linux (glibc)     | x86_64, aarch64    | manylinux                |
 | Linux (musl)      | x86_64, aarch64    | musllinux (e.g. Alpine)  |
 | macOS             | arm64, x86_64      | native                   |
-| Windows           | x86_64             | best-effort, unsupported |
+| Windows           | x86_64             | none published (sdist)   |
 
 Wheels are CPython 3.14 GIL builds (`cp314`) only: cffi's API mode targets a
 specific interpreter, so there is no `abi3` wheel and no free-threaded
-(`cp314t`) wheel yet. On any other platform, the source distribution builds
-offline from the bundled vendored source — that path needs only zig and a C
-compiler, never the network.
+(`cp314t`) wheel yet. On any other platform, pip builds from the source
+distribution: the bundled upstream source and prefetched zig deps keep that
+build off the network for Ghostty itself, needing only zig and a C compiler.
+(pip still resolves its own build backend — setuptools, cffi, ziglang — from
+PyPI as usual.)
 
 ## Quickstart
 
@@ -139,8 +143,9 @@ just build     # build the raw-layer cffi extension in place (offline)
 just test      # run the test suite with 100% branch coverage enforced
 ```
 
-`just setup` (run by `just vendor`'s environment implicitly, or on its own)
-syncs the dev environment. The full recipe set:
+`just setup` syncs the dev environment explicitly. You rarely need to call it
+directly: the `uv run`-based recipes (`just build`, `just test`, …) sync it
+implicitly on first use. The main recipes:
 
 ```sh
 just setup     # sync the dev environment (Python 3.14+, pinned zig)
