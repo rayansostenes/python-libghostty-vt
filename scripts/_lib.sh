@@ -27,10 +27,20 @@ ZIG_BUILD_OPTS=(
 
 # Run `zig build` via the pinned `ziglang` dev dependency, from the vendored
 # source, using the shared zig global cache. Extra args are passed through.
+#
+# The toolchain is provisioned with `uv sync --no-install-project`: it installs
+# the dev dependencies (ziglang included) but skips building/installing the
+# project itself. The subsequent `uv run --no-sync` then executes against that
+# environment without re-syncing. Without this split, `uv run` would build the
+# cffi extension as a side effect of syncing the editable install, dragging a
+# full static-lib compile into the vendoring prefetch (before its deps are even
+# fetched). Vendoring only needs the zig toolchain, never the extension.
 zig_build() {
+    uv sync --project "${REPO_ROOT}" --no-install-project --quiet
     (
         cd "${GHOSTTY_DIR}" || exit
         ZIG_GLOBAL_CACHE_DIR="${ZIG_CACHE_DIR}" \
-            uv run --project "${REPO_ROOT}" python -m ziglang build "$@"
+            uv run --project "${REPO_ROOT}" --no-sync \
+            python -m ziglang build "$@"
     )
 }
