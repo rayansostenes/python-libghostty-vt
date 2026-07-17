@@ -1,0 +1,59 @@
+name: CI
+
+# Every pull request and every push to main gets a red/green verdict.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Supersede in-flight runs for the same ref; the latest commit is the only one
+# whose verdict matters.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: checks (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # Report both platforms' verdicts even when one fails.
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      # uv provisions Python 3.14 and, via the ziglang dev dependency, the
+      # pinned zig toolchain used to build the static libghostty-vt.
+      - name: Install uv (with Python 3.14)
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.14"
+          enable-cache: true
+
+      - name: Install just
+        uses: extractions/setup-just@v2
+
+      # Fetch upstream at the pinned commit and prefetch zig build deps, so the
+      # static libghostty-vt then builds without touching the network.
+      - name: Vendor upstream source at the pinned commit
+        run: just vendor
+
+      - name: Build the raw-layer extension
+        run: just build
+
+      - name: Lint (ruff)
+        run: just lint
+
+      - name: Format check (ruff)
+        run: just fmt-check
+
+      - name: Type-check (mypy + pyright, strict)
+        run: just typecheck
+
+      - name: Tests with 100% coverage gate
+        run: just test
