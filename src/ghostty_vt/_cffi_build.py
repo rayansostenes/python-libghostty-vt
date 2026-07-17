@@ -50,10 +50,15 @@ ZIG_CACHE_DIR = VENDOR_DIR / "zig-cache"
 # options the vendoring prefetch walked, or a lazy zig dependency could be
 # missing. Like _lib.sh, the optimize mode honors the ZIG_OPTIMIZE override and
 # defaults to ReleaseFast.
+# `-Dcpu=baseline` (as in _lib.sh) pins codegen to the portable baseline for
+# the target arch instead of the build host's native CPU, so cached CI libs and
+# release wheels run on any machine of that arch. Ghostty's SIMD hot paths are
+# unaffected: they runtime-dispatch via Highway to the executing CPU.
 _OPTIMIZE = os.environ.get("ZIG_OPTIMIZE", "ReleaseFast")
 _ZIG_BUILD_OPTS = (
     "-Demit-lib-vt=true",
     "-Demit-xcframework=false",
+    "-Dcpu=baseline",
     f"-Doptimize={_OPTIMIZE}",
 )
 

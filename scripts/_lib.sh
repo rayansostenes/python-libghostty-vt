@@ -18,10 +18,18 @@ OPTIMIZE="${ZIG_OPTIMIZE:-ReleaseFast}"
 # the same options: `zig build --fetch` only walks lazy dependencies reachable
 # under the options it is given, so a mismatch could leave a dep unfetched and
 # break the no-network build.
+# `-Dcpu=baseline` pins codegen to the portable baseline for the target arch:
+# zig otherwise targets the *native* host CPU, so a lib built on one machine
+# (e.g. a CI runner with AVX-512) can SIGILL on another. Portability matters
+# twice: CI restores cached libs across a heterogeneous runner fleet, and
+# release wheels must run on any user machine. Ghostty's SIMD hot paths keep
+# their speed regardless: they use Highway's runtime dispatch, which selects
+# the best instruction set on the executing CPU.
 # shellcheck disable=SC2034  # consumed by the scripts that source this file
 ZIG_BUILD_OPTS=(
     -Demit-lib-vt=true
     -Demit-xcframework=false
+    -Dcpu=baseline
     "-Doptimize=${OPTIMIZE}"
 )
 
