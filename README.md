@@ -13,9 +13,23 @@ Idiomatic, fully typed Python bindings for
 
 ## Status
 
-This is the ground floor of the build pipeline: project scaffold, a single
-pinned upstream commit, an offline vendoring + static-library build. The cffi
-bindings and the idiomatic Python API land in later milestones.
+Early tracer bullet: a complete path through every layer for a single tiny
+domain. A cffi API-mode extension (per [ADR 0001](docs/adr/0001-cffi-api-mode-bindings.md))
+statically links the zig-built libghostty-vt and exposes its `build_info` domain
+through a private raw layer and a typed idiomatic wrapper. The remaining domains
+and the full raw surface land in later milestones.
+
+```python
+import ghostty_vt
+
+info = ghostty_vt.build_info()
+info.simd              # bool: SIMD code paths enabled
+info.kitty_graphics    # bool: Kitty graphics support
+info.optimize          # OptimizeMode.RELEASE_FAST
+info.version           # "0.1.0-dev"
+
+ghostty_vt.GHOSTTY_COMMIT  # the pinned upstream commit, baked at build time
+```
 
 ## Local development
 
@@ -27,11 +41,15 @@ needed.
 ```sh
 just setup     # sync the dev environment (Python 3.14+, pinned zig)
 just vendor    # fetch upstream at the pinned commit + prefetch zig deps (network)
-just build     # build the static libghostty-vt from vendored source (offline)
+just build     # build the raw-layer cffi extension in place (offline)
+just build-lib # build only the static libghostty-vt from vendored source (offline)
 just lint      # ruff lint
 just fmt       # ruff format
-just test      # run the test suite
+just test      # run the test suite with 100% branch coverage enforced
 ```
+
+After `just vendor`, `just build` compiles the extension (building the static
+library first if needed) so `just test` can import `ghostty_vt`.
 
 Run `just` with no arguments to list every recipe.
 
