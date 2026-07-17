@@ -1,0 +1,108 @@
+name: Wheels
+
+# Build the full wheel matrix plus the sdist on demand and on every published
+# release. The release pipeline (issue #20) consumes these artifacts; here we
+# only build and verify them.
+on:
+  workflow_dispatch:
+  release:
+    types: [published]
+
+concurrency:
+  group: wheels-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sdist:
+    name: sdist
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8
+
+      # Populate vendor/ (upstream source at the pinned commit + prefetched zig
+      # deps) so the sdist bundles it and builds offline downstream.
+      - name: Vendor upstream source
+        run: bash scripts/fetch-vendor.sh
+
+      - name: Build sdist
+        run: uv build --sdist
+
+      # Verify the sdist is installable: a clean install compiles the extension
+      # from the bundled vendored source (no upstream network) and the suite
+      # passes against it.
+      - name: Verify sdist installs and passes tests
+        run: |
+          uv venv
+          uv pip install "$(ls dist/*.tar.gz)" pytest
+          .venv/bin/pytest tests -o addopts=
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: sdist
+          path: dist/*.tar.gz
+
+  wheels:
+    name: wheels ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux jobs build both manylinux and musllinux for their arch, which
+          # is cibuildwheel's default, so these two runners cover all four Linux
+          # targets. aarch64 uses a native ARM runner (no QEMU emulation).
+          - { name: linux-x86_64, os: ubuntu-24.04, archs: x86_64 }
+          - { name: linux-aarch64, os: ubuntu-24.04-arm, archs: aarch64 }
+          - { name: macos-arm64, os: macos-14, archs: arm64 }
+          - { name: macos-x86_64, os: macos-15-intel, archs: x86_64 }
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8
+
+      # Vendor on the host; cibuildwheel copies the whole working directory
+      # (vendor/ included) into each build environment, so the static lib builds
+      # offline inside the manylinux/musllinux containers.
+      - name: Vendor upstream source
+        run: bash scripts/fetch-vendor.sh
+        shell: bash
+
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v4.1.0
+        with:
+          archs: ${{ matrix.archs }}
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: wheels-${{ matrix.name }}
+          path: wheelhouse/*.whl
+
+  # Windows is best-effort only: the job runs the same build but can never fail
+  # the workflow (Windows is not a supported platform for v0.1).
+  windows-wheels:
+    name: wheels windows (best-effort)
+    runs-on: windows-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8
+
+      - name: Vendor upstream source
+        run: bash scripts/fetch-vendor.sh
+        shell: bash
+
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v4.1.0
+        with:
+          archs: AMD64
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: wheels-windows
+          path: wheelhouse/*.whl
