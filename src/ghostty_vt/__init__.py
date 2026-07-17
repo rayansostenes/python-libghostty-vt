@@ -6,8 +6,9 @@ binding over the C API) and this public idiomatic layer. The idiomatic layer is
 the only surface with stability intent.
 
 Domains are organized into submodules; flagship names are re-exported here at the
-top level. This release covers the ``build_info`` tracer domain plus the error
-hierarchy and shared value types; the remaining domains land in later milestones.
+top level. This release covers the ``build_info`` tracer domain plus the
+foundation domains — errors, shared types, and color; the remaining domains land
+in later milestones.
 """
 
 from __future__ import annotations
@@ -20,6 +21,7 @@ from ghostty_vt.build_info import (
     OptimizeMode,
     build_info,
 )
+from ghostty_vt.color import Rgb
 from ghostty_vt.errors import (
     GhosttyVtError,
     InvalidValueError,
@@ -40,6 +42,7 @@ __all__ = [
     "OutOfSpaceError",
     "Point",
     "PointTag",
+    "Rgb",
     "SurfacePosition",
     "__version__",
     "build_info",
