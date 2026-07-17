@@ -8,11 +8,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-
-VENDOR_DIR="${REPO_ROOT}/vendor"
-GHOSTTY_DIR="${VENDOR_DIR}/ghostty"
-ZIG_CACHE_DIR="${VENDOR_DIR}/zig-cache"
+# shellcheck source=scripts/_lib.sh
+source "${SCRIPT_DIR}/_lib.sh"
 
 UPSTREAM_URL="${GHOSTTY_UPSTREAM_URL:-https://github.com/ghostty-org/ghostty}"
 COMMIT="$(tr -d '[:space:]' < "${REPO_ROOT}/ghostty-commit.txt")"
@@ -38,11 +35,6 @@ fi
 echo ">> Upstream license retained at vendor/ghostty/LICENSE"
 
 echo ">> Prefetching zig build dependencies into vendor/zig-cache"
-(
-    cd "${GHOSTTY_DIR}"
-    ZIG_GLOBAL_CACHE_DIR="${ZIG_CACHE_DIR}" \
-        uv run --project "${REPO_ROOT}" python -m ziglang build \
-        --fetch -Demit-lib-vt=true
-)
+zig_build --fetch "${ZIG_BUILD_OPTS[@]}"
 
 echo ">> Vendored source ready at vendor/ghostty (commit ${COMMIT})"
