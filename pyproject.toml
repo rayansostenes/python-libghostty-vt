@@ -1,0 +1,67 @@
+[project]
+name = "python-libghostty-vt"
+version = "0.1.0.dev0"
+description = "Idiomatic, fully typed Python bindings for libghostty-vt, the C-ABI terminal library extracted from Ghostty."
+readme = "README.md"
+requires-python = ">=3.14"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Rayan Sóstenes" }]
+keywords = ["terminal", "vt", "ghostty", "emulator", "ansi", "escape-sequences"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Terminals :: Terminal Emulators/X Terminals",
+    "Typing :: Typed",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/rayancocos/python-libghostty-vt"
+Repository = "https://github.com/rayancocos/python-libghostty-vt"
+Issues = "https://github.com/rayancocos/python-libghostty-vt/issues"
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+ghostty_vt = ["py.typed"]
+
+[dependency-groups]
+dev = [
+    # Pinned zig toolchain: tracks upstream's minimum (ghostty build.zig.zon).
+    # This is the single source of truth for the zig version.
+    "ziglang==0.15.2",
+    "ruff>=0.14",
+    "pytest>=8.4",
+]
+
+[tool.ruff]
+target-version = "py314"
+line-length = 88
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "B",    # flake8-bugbear
+    "UP",   # pyupgrade
+    "C4",   # flake8-comprehensions
+    "SIM",  # flake8-simplify
+    "RUF",  # ruff-specific rules
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["ghostty_vt"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
