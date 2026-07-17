@@ -33,4 +33,4 @@ __all__ = [
 # back from the installed distribution metadata. Keeping a second hand-edited
 # literal here would let the runtime version drift from the published one — the
 # release version guard only checks the sdist/pyproject version, not this.
-__version__ = _version("python-libghostty-vt")
+__version__: str = _version("python-libghostty-vt")

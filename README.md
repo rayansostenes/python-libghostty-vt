@@ -46,6 +46,8 @@ just build-lib # build only the static libghostty-vt from vendored source (offli
 just lint      # ruff lint
 just fmt       # ruff format
 just test      # run the test suite with 100% branch coverage enforced
+just typecheck # mypy + pyright (strict) over source and tests
+just typesafety # run the typesafety suite (see typesafety/README.md)
 ```
 
 After `just vendor`, `just build` compiles the extension (building the static
