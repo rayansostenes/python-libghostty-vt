@@ -34,6 +34,11 @@ _lib = _raw.lib
 # bad size raises a clear ValueError instead of a cffi OverflowError.
 _MAX_DIMENSION: Final[int] = 0xFFFF
 
+# max_scrollback is size_t in the C API; bound it up front for the same reason
+# as the dimensions, so an out-of-range value raises a clear ValueError instead
+# of a cffi OverflowError.
+_MAX_SCROLLBACK: Final[int] = 2 ** (8 * _ffi.sizeof("size_t")) - 1
+
 
 def _check_dimension(name: str, value: int) -> None:
     if not 1 <= value <= _MAX_DIMENSION:
@@ -262,13 +267,15 @@ class Terminal:
 
         Raises:
             ValueError: If ``cols`` or ``rows`` is outside 1 to 65535, or if
-                ``scrollback`` is negative.
+                ``scrollback`` is outside 0 to the platform ``size_t`` maximum.
             OutOfMemoryError: If the native terminal could not be allocated.
         """
         _check_dimension("cols", cols)
         _check_dimension("rows", rows)
-        if scrollback < 0:
-            raise ValueError(f"scrollback must be non-negative, got {scrollback}")
+        if not 0 <= scrollback <= _MAX_SCROLLBACK:
+            raise ValueError(
+                f"scrollback must be between 0 and {_MAX_SCROLLBACK}, got {scrollback}"
+            )
 
         options = _ffi.new(
             "GhosttyTerminalOptions *",
@@ -403,9 +410,14 @@ class Terminal:
     def set_mode(self, mode: Mode, value: bool) -> None:
         """Set ``mode`` to ``value``.
 
-        This is equivalent to feeding the mode's set/reset escape sequence: the
-        change is observable through :meth:`get_mode` and, for state-bearing
-        modes, through the corresponding screen-state property.
+        This writes the mode register directly, exactly as the C API does, and
+        the change is observable through :meth:`get_mode`. It is *not* a replay
+        of the mode's escape sequence, so the side effects a sequence would
+        trigger do not happen: setting an alternate-screen mode records the mode
+        but does not switch :attr:`active_screen`, for example. Feed the escape
+        sequence with :meth:`feed` when you need those effects. Screen-state
+        views that read the same register — such as :attr:`Cursor.visible` for
+        :attr:`Mode.CURSOR_VISIBLE` — still agree with :meth:`get_mode`.
 
         Raises:
             UseAfterCloseError: If the terminal has been closed.
