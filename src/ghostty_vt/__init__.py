@@ -7,9 +7,13 @@ the only surface with stability intent.
 
 Domains are organized into submodules; flagship names are re-exported here at the
 top level. This release covers the ``build_info`` tracer domain, the foundation
-domains — errors, shared types, and color — and the core of the ``terminal``
-domain (create, feed, read visible text, resize); the remaining domains land in
-later milestones.
+domains — errors, shared types, and color — the core of the ``terminal`` domain
+(create, feed, read visible text, resize), and the standalone sequence parsers
+``osc`` and ``sgr``; the remaining domains land in later milestones.
+
+The sequence parsers are reached through their submodules, ``ghostty_vt.osc`` and
+``ghostty_vt.sgr``, so their generic names (``parse``, ``Command``, ``Attribute``)
+stay domain-qualified rather than crowding the top level.
 """
 
 from __future__ import annotations
