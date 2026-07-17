@@ -6,11 +6,12 @@ on:
   push:
     branches: [main]
 
-# Supersede in-flight runs for the same ref; the latest commit is the only one
-# whose verdict matters.
+# Supersede in-flight runs for the same PR branch; the latest commit is the only
+# one whose verdict matters. Runs on main are never cancelled, so every commit to
+# the release-gating branch records its own completed verdict.
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 permissions:
   contents: read
