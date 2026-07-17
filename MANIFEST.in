@@ -1,0 +1,21 @@
+# Bundle everything the raw-layer extension needs to build offline from an
+# sdist: the pinned-commit file, the build shim, the vendored upstream source,
+# and the prefetched zig package cache. With these present, a wheel build never
+# touches the network.
+
+include ghostty-commit.txt
+include setup.py
+recursive-include scripts *.sh
+
+# Vendored upstream source (headers + zig build inputs).
+graft vendor/ghostty
+prune vendor/ghostty/.git
+
+# Prefetched zig dependencies: ship only the source-package cache (p/). Zig
+# rebuilds every other cache directory from it, so the local build-artifact and
+# hash-manifest caches are intentionally omitted (shipping stale h/ manifests
+# without their o/ outputs would break the offline build).
+graft vendor/zig-cache/p
+
+# Never ship compiled extensions in the sdist; they are built per-platform.
+global-exclude *.so *.pyd *.dylib *.a
