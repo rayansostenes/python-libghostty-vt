@@ -12,14 +12,21 @@ coordinates in one of the terminal's coordinate spaces. Adjustments
 (:meth:`Selection.adjust`) and reorderings (:meth:`Selection.ordered`) return a new
 selection rather than mutating in place, so a selection value is stable once made.
 
-A selection borrows its terminal: it holds no independent lifetime, and every
-operation goes through the terminal's handle, so using a selection after its
-terminal is closed raises :class:`~ghostty_vt.UseAfterCloseError`.
+A selection anchors its endpoints to the cells they cover and follows them as the
+screen changes: feeding more bytes, scrolling into scrollback, and resizing all
+keep the selection pointing at the same content. Its text is resolved live from
+the terminal on each call, so :meth:`Selection.text` always reflects the current
+screen state at the anchored cells.
+
+A selection borrows its terminal: every operation goes through the terminal's
+handle, so using a selection after its terminal is closed raises
+:class:`~ghostty_vt.UseAfterCloseError`.
 """
 
 from __future__ import annotations
 
 import enum
+import weakref
 from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any
 
@@ -110,10 +117,37 @@ def _grid_ref(handle: Any, point: Point) -> Any:
 
 
 def _codepoints(chars: Iterable[str] | None) -> tuple[Any, int]:
+    # Upstream applies its default codepoints only for a NULL pointer with a
+    # zero length; a non-NULL zero-length array is read as an explicit empty
+    # set. Map both `None` and an empty iterable to NULL so the default path is
+    # taken whenever the caller supplies no characters.
     if chars is None:
         return _ffi.NULL, 0
     values = [ord(char) for char in chars]
+    if not values:
+        return _ffi.NULL, 0
     return _ffi.new("uint32_t[]", values), len(values)
+
+
+def _point_from_ref(handle: Any, grid_ref: Any) -> Point:
+    ref = _ffi.new("GhosttyGridRef *")
+    ref[0] = grid_ref
+    out = _ffi.new("GhosttyPointCoordinate *")
+    result = _lib.ghostty_terminal_point_from_grid_ref(
+        handle, ref, _lib.GHOSTTY_POINT_TAG_SCREEN, out
+    )
+    _result.check(result, "could not resolve selection point")
+    return Point(PointTag.SCREEN, int(out.x), int(out.y))
+
+
+def _track_point(handle: Any, point: Point) -> Any:
+    # A tracked grid ref follows its cell across scrolling, scrollback pruning,
+    # and resize/reflow, so a selection anchored on tracked refs stays valid
+    # across terminal mutations. It is owned and must be freed.
+    out = _ffi.new("GhosttyTrackedGridRef *")
+    result = _lib.ghostty_terminal_grid_ref_track(handle, _point_cdata(point), out)
+    _result.check(result, "could not track selection endpoint")
+    return out[0]
 
 
 class Selection:
@@ -125,16 +159,57 @@ class Selection:
     terminal is closed.
     """
 
-    def __init__(self, terminal: Terminal, cdata: Any) -> None:
-        # Internal constructor. Use the classmethod factories; `cdata` is a raw
-        # `GhosttySelection *` owned by this object and must outlive it.
+    def __init__(
+        self,
+        terminal: Terminal,
+        _start: Any,
+        _end: Any,
+        _rectangle: bool,
+    ) -> None:
+        # Not part of the public API: construct selections through the classmethod
+        # factories. `_start` and `_end` are owned `GhosttyTrackedGridRef` handles
+        # that anchor the endpoints; each is freed by its own finalizer.
         self._terminal = terminal
-        self._cdata = cdata
+        self._start = _start
+        self._end = _end
+        self._rectangle = _rectangle
+        self._start_finalizer = weakref.finalize(
+            self, _lib.ghostty_tracked_grid_ref_free, _start
+        )
+        self._end_finalizer = weakref.finalize(
+            self, _lib.ghostty_tracked_grid_ref_free, _end
+        )
 
     @classmethod
     def _wrap(cls, terminal: Terminal, cdata: Any) -> Selection:
+        # Anchor the snapshot's endpoints on tracked refs so the selection stays
+        # valid after later terminal mutations. Both endpoint points are read
+        # before either is tracked, since the untracked snapshot refs in `cdata`
+        # are only valid until the next mutating terminal call.
+        handle = _terminal_handle(terminal)
+        start = _point_from_ref(handle, cdata.start)
+        end = _point_from_ref(handle, cdata.end)
+        start_ref = _track_point(handle, start)
+        end_ref = _track_point(handle, end)
+        return cls(terminal, start_ref, end_ref, bool(cdata.rectangle))
+
+    def _snapshot(self) -> Any:
+        # Rebuild an untracked `GhosttySelection` from the tracked endpoints. The
+        # snapshot refs are only valid until the next mutating terminal call, so
+        # callers must consume the returned cdata immediately, before any such
+        # call.
+        cdata = _ffi.new("GhosttySelection *")
         cdata.size = _ffi.sizeof("GhosttySelection")
-        return cls(terminal, cdata)
+        start_out = _ffi.new("GhosttyGridRef *")
+        result = _lib.ghostty_tracked_grid_ref_snapshot(self._start, start_out)
+        _result.check(result, "could not resolve selection start")
+        cdata.start = start_out[0]
+        end_out = _ffi.new("GhosttyGridRef *")
+        result = _lib.ghostty_tracked_grid_ref_snapshot(self._end, end_out)
+        _result.check(result, "could not resolve selection end")
+        cdata.end = end_out[0]
+        cdata.rectangle = self._rectangle
+        return cdata
 
     @classmethod
     def point_to_point(
@@ -302,25 +377,25 @@ class Selection:
     @property
     def rectangle(self) -> bool:
         """Whether this is a rectangular (column-block) selection."""
-        return bool(self._cdata.rectangle)
+        return self._rectangle
 
     @property
     def start(self) -> Point:
         """The selection's start cell, in full-screen coordinates."""
-        return self._point_of(self._cdata.start)
+        return self._point_of(self._start)
 
     @property
     def end(self) -> Point:
         """The selection's end cell, in full-screen coordinates."""
-        return self._point_of(self._cdata.end)
+        return self._point_of(self._end)
 
-    def _point_of(self, grid_ref: Any) -> Point:
-        handle = _terminal_handle(self._terminal)
-        ref = _ffi.new("GhosttyGridRef *")
-        ref[0] = grid_ref
+    def _point_of(self, tracked_ref: Any) -> Point:
+        # Enforce the closed-terminal contract before touching native state: a
+        # tracked ref would otherwise report no value once its terminal is freed.
+        _terminal_handle(self._terminal)
         out = _ffi.new("GhosttyPointCoordinate *")
-        result = _lib.ghostty_terminal_point_from_grid_ref(
-            handle, ref, _lib.GHOSTTY_POINT_TAG_SCREEN, out
+        result = _lib.ghostty_tracked_grid_ref_point(
+            tracked_ref, _lib.GHOSTTY_POINT_TAG_SCREEN, out
         )
         _result.check(result, "could not resolve selection point")
         return Point(PointTag.SCREEN, int(out.x), int(out.y))
@@ -329,8 +404,9 @@ class Selection:
     def order(self) -> SelectionOrder:
         """How the selection's start and end are ordered on screen."""
         handle = _terminal_handle(self._terminal)
+        cdata = self._snapshot()
         out = _ffi.new("GhosttySelectionOrder *")
-        result = _lib.ghostty_terminal_selection_order(handle, self._cdata, out)
+        result = _lib.ghostty_terminal_selection_order(handle, cdata, out)
         _result.check(result, "could not query selection order")
         return SelectionOrder(out[0])
 
@@ -346,12 +422,13 @@ class Selection:
             UseAfterCloseError: If the terminal has been closed.
         """
         handle = _terminal_handle(self._terminal)
+        cdata = self._snapshot()
         options = _ffi.new("GhosttyTerminalSelectionFormatOptions *")
         options.size = _ffi.sizeof("GhosttyTerminalSelectionFormatOptions")
         options.emit = _lib.GHOSTTY_FORMATTER_FORMAT_PLAIN
         options.unwrap = unwrap
         options.trim = trim
-        options.selection = self._cdata
+        options.selection = cdata
 
         out_ptr = _ffi.new("uint8_t **")
         out_len = _ffi.new("size_t *")
@@ -373,11 +450,10 @@ class Selection:
             UseAfterCloseError: If the terminal has been closed.
         """
         handle = _terminal_handle(self._terminal)
-        cdata = _ffi.new("GhosttySelection *")
-        cdata[0] = self._cdata[0]
+        cdata = self._snapshot()
         result = _lib.ghostty_terminal_selection_adjust(handle, cdata, adjustment.value)
         _result.check(result, "could not adjust selection")
-        return type(self)(self._terminal, cdata)
+        return type(self)._wrap(self._terminal, cdata)
 
     def ordered(self, order: SelectionOrder) -> Selection:
         """Return an equivalent selection whose endpoints follow ``order``.
@@ -389,12 +465,14 @@ class Selection:
             UseAfterCloseError: If the terminal has been closed.
         """
         handle = _terminal_handle(self._terminal)
-        cdata = _ffi.new("GhosttySelection *")
+        cdata = self._snapshot()
+        out = _ffi.new("GhosttySelection *")
+        out.size = _ffi.sizeof("GhosttySelection")
         result = _lib.ghostty_terminal_selection_ordered(
-            handle, self._cdata, order.value, cdata
+            handle, cdata, order.value, out
         )
         _result.check(result, "could not reorder selection")
-        return type(self)(self._terminal, cdata)
+        return type(self)._wrap(self._terminal, out)
 
     def contains(self, point: Point) -> bool:
         """Whether ``point`` falls within the selected region.
@@ -403,9 +481,10 @@ class Selection:
             UseAfterCloseError: If the terminal has been closed.
         """
         handle = _terminal_handle(self._terminal)
+        cdata = self._snapshot()
         out = _ffi.new("bool *")
         result = _lib.ghostty_terminal_selection_contains(
-            handle, self._cdata, _point_cdata(point), out
+            handle, cdata, _point_cdata(point), out
         )
         _result.check(result, "could not test selection membership")
         return bool(out[0])
@@ -419,9 +498,9 @@ class Selection:
         if other._terminal is not self._terminal:
             return False
         handle = _terminal_handle(self._terminal)
+        cdata = self._snapshot()
+        other_cdata = other._snapshot()
         out = _ffi.new("bool *")
-        result = _lib.ghostty_terminal_selection_equal(
-            handle, self._cdata, other._cdata, out
-        )
+        result = _lib.ghostty_terminal_selection_equal(handle, cdata, other_cdata, out)
         _result.check(result, "could not compare selections")
         return bool(out[0])
