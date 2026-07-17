@@ -320,6 +320,19 @@ def test_set_mode_and_screen_state_agree() -> None:
         assert term.cursor.visible is False
 
 
+def test_set_mode_writes_register_without_escape_side_effects() -> None:
+    # set_mode records the mode register but does not replay the sequence's
+    # side effects: the alt-screen mode is set, yet the screen does not switch.
+    with Terminal(10, 3) as term:
+        term.set_mode(Mode.ALT_SCREEN, True)
+        assert term.get_mode(Mode.ALT_SCREEN) is True
+        assert term.active_screen is Screen.PRIMARY
+    # Feeding the escape sequence is what actually switches the screen.
+    with Terminal(10, 3) as term:
+        term.feed(b"\x1b[?1047h")
+        assert term.active_screen is Screen.ALTERNATE
+
+
 def test_ansi_and_dec_modes_are_distinct() -> None:
     # ANSI 4 (INSERT) and DEC 4 (SLOW_SCROLL) share a number but are separate.
     with Terminal(10, 3) as term:
@@ -357,8 +370,15 @@ def test_scrollback_content_is_reachable_beyond_the_visible_area() -> None:
 
 
 def test_new_rejects_negative_scrollback() -> None:
-    with pytest.raises(ValueError, match="scrollback must be non-negative"):
+    with pytest.raises(ValueError, match="scrollback must be between 0 and"):
         Terminal(10, 3, scrollback=-1)
+
+
+def test_new_rejects_oversized_scrollback() -> None:
+    # scrollback maps to size_t; an out-of-range value is a clear ValueError,
+    # not a leaked cffi OverflowError.
+    with pytest.raises(ValueError, match="scrollback must be between 0 and"):
+        Terminal(10, 3, scrollback=2**64)
 
 
 def test_viewport_starts_pinned_to_the_active_area() -> None:
