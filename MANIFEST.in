@@ -6,6 +6,8 @@
 include ghostty-commit.txt
 include setup.py
 recursive-include scripts *.sh
+# The generated raw-layer cdef consumed by the build at wheel/sdist time.
+include src/ghostty_vt/_cdef.h
 
 # Vendored upstream source (headers + zig build inputs).
 graft vendor/ghostty

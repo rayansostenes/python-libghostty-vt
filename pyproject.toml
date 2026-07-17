@@ -32,7 +32,9 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 [tool.setuptools.package-data]
-ghostty_vt = ["py.typed", "_raw.pyi"]
+# _cdef.h is the generated raw-layer cdef; it must ship in the sdist so an
+# offline wheel build can regenerate the extension from it.
+ghostty_vt = ["py.typed", "_raw.pyi", "_cdef.h"]
 
 [dependency-groups]
 dev = [
@@ -71,6 +73,9 @@ known-first-party = ["ghostty_vt"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# The cdef generator is build-time tooling outside the shipped package; put it on
+# the path so its tests can import it without installing it.
+pythonpath = ["tools"]
 addopts = [
     "-ra",
     "--cov=ghostty_vt",

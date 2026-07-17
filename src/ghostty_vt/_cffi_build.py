@@ -36,6 +36,10 @@ def _repo_root() -> Path:
 
 
 ROOT = _repo_root()
+# The cdef consumed here is generated from the vendored headers by
+# tools/gen_cdef (regenerated with `just gen-cdef`); it sits next to this build
+# script so it ships in the sdist and is available for offline wheel builds.
+CDEF_FILE = Path(__file__).resolve().parent / "_cdef.h"
 VENDOR_DIR = ROOT / "vendor"
 GHOSTTY_DIR = VENDOR_DIR / "ghostty"
 INCLUDE_DIR = GHOSTTY_DIR / "include"
@@ -103,50 +107,11 @@ def _pinned_commit() -> str:
 
 def _build() -> FFI:
     ffi = FFI()
-    ffi.cdef(
-        """
-        typedef enum {
-            GHOSTTY_SUCCESS,
-            GHOSTTY_OUT_OF_MEMORY,
-            GHOSTTY_INVALID_VALUE,
-            GHOSTTY_OUT_OF_SPACE,
-            GHOSTTY_NO_VALUE,
-            ...
-        } GhosttyResult;
-
-        typedef enum {
-            GHOSTTY_OPTIMIZE_DEBUG,
-            GHOSTTY_OPTIMIZE_RELEASE_SAFE,
-            GHOSTTY_OPTIMIZE_RELEASE_SMALL,
-            GHOSTTY_OPTIMIZE_RELEASE_FAST,
-            ...
-        } GhosttyOptimizeMode;
-
-        typedef enum {
-            GHOSTTY_BUILD_INFO_INVALID,
-            GHOSTTY_BUILD_INFO_SIMD,
-            GHOSTTY_BUILD_INFO_KITTY_GRAPHICS,
-            GHOSTTY_BUILD_INFO_TMUX_CONTROL_MODE,
-            GHOSTTY_BUILD_INFO_OPTIMIZE,
-            GHOSTTY_BUILD_INFO_VERSION_STRING,
-            GHOSTTY_BUILD_INFO_VERSION_MAJOR,
-            GHOSTTY_BUILD_INFO_VERSION_MINOR,
-            GHOSTTY_BUILD_INFO_VERSION_PATCH,
-            GHOSTTY_BUILD_INFO_VERSION_PRE,
-            GHOSTTY_BUILD_INFO_VERSION_BUILD,
-            ...
-        } GhosttyBuildInfo;
-
-        typedef struct {
-            const uint8_t* ptr;
-            size_t len;
-        } GhosttyString;
-
-        GhosttyResult ghostty_build_info(GhosttyBuildInfo data, void *out);
-
-        extern const char *const ghostty_vt_pinned_commit;
-        """
-    )
+    # The upstream surface comes from the generated cdef; the pinned-commit
+    # symbol below is our own injected constant (not an upstream declaration),
+    # so it stays hand-written here.
+    ffi.cdef(CDEF_FILE.read_text())
+    ffi.cdef("extern const char *const ghostty_vt_pinned_commit;")
     commit = _pinned_commit()
     ffi.set_source(
         "ghostty_vt._raw",
