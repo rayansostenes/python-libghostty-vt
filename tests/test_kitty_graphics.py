@@ -180,15 +180,25 @@ def test_image_lookup_rejects_out_of_range_id(image_id: int) -> None:
             graphics.image(image_id)
 
 
-def test_retransmitting_an_image_changes_its_generation() -> None:
+def test_retransmitting_an_image_replaces_its_pixels_and_generation() -> None:
     with Terminal(80, 24) as term:
         graphics = term.kitty_graphics()
         term.feed(_transmit(image_id=1))
         first = graphics.image(1)
         assert first is not None
-        term.feed(_transmit(image_id=1))
+        assert (first.width, first.height) == (1, 1)
+        assert first.format is ImageFormat.RGB
+        assert first.data == _RED
+        # Re-transmit the same id with a different size, format, and pixels; the
+        # stored image must reflect the new content, not just a bumped stamp.
+        green = bytes([0, 255, 0, 255] * 4)  # 2x2 RGBA
+        payload = base64.b64encode(green).decode("ascii")
+        term.feed(f"\x1b_Ga=t,f=32,s=2,v=2,i=1,q=2;{payload}\x1b\\".encode())
         second = graphics.image(1)
         assert second is not None
+        assert (second.width, second.height) == (2, 2)
+        assert second.format is ImageFormat.RGBA
+        assert second.data == green
         assert second.generation != first.generation
 
 
@@ -199,6 +209,19 @@ def test_deleting_all_placements_clears_them() -> None:
         assert graphics.placements() != ()
         term.feed(b"\x1b_Ga=d\x1b\\")
         assert graphics.placements() == ()
+
+
+def test_deleting_one_placement_retains_the_others_and_the_image() -> None:
+    with Terminal(80, 24) as term:
+        graphics = term.kitty_graphics()
+        term.feed(_transmit(image_id=1, extra="p=1"))
+        term.feed(_transmit(image_id=1, extra="p=2"))
+        assert {p.placement_id for p in graphics.placements()} == {1, 2}
+        # a=d,d=i,i=1,p=1 deletes only placement 1 of image 1, keeping image data.
+        term.feed(b"\x1b_Ga=d,d=i,i=1,p=1\x1b\\")
+        remaining = graphics.placements()
+        assert {p.placement_id for p in remaining} == {2}
+        assert graphics.image(1) is not None
 
 
 def test_deleting_an_image_removes_it_from_storage() -> None:
