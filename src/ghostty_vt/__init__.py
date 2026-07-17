@@ -8,8 +8,9 @@ the only surface with stability intent.
 Domains are organized into submodules; flagship names are re-exported here at the
 top level. This release covers the ``build_info`` tracer domain, the foundation
 domains — errors, shared types, and color — the core of the ``terminal`` domain
-(create, feed, read visible text, resize), and the standalone sequence parsers
-``osc`` and ``sgr``; the remaining domains land in later milestones.
+(create, feed, read visible text, resize), the standalone sequence parsers
+``osc`` and ``sgr``, and the small encode/measure domains: paste, unicode, size
+report, color scheme, and focus. The remaining domains land in later milestones.
 
 The sequence parsers are reached through their submodules, ``ghostty_vt.osc`` and
 ``ghostty_vt.sgr``, so their generic names (``parse``, ``Command``, ``Attribute``)
@@ -27,6 +28,7 @@ from ghostty_vt.build_info import (
     build_info,
 )
 from ghostty_vt.color import Rgb
+from ghostty_vt.color_scheme import ColorScheme
 from ghostty_vt.errors import (
     GhosttyVtError,
     InvalidValueError,
@@ -35,12 +37,16 @@ from ghostty_vt.errors import (
     OutOfSpaceError,
     UseAfterCloseError,
 )
+from ghostty_vt.focus import FocusEvent
+from ghostty_vt.size_report import SizeReportStyle
 from ghostty_vt.terminal import Terminal
 from ghostty_vt.types import Point, PointTag, SurfacePosition
 
 __all__ = [
     "GHOSTTY_COMMIT",
     "BuildInfo",
+    "ColorScheme",
+    "FocusEvent",
     "GhosttyVtError",
     "InvalidValueError",
     "NoValueError",
@@ -50,6 +56,7 @@ __all__ = [
     "Point",
     "PointTag",
     "Rgb",
+    "SizeReportStyle",
     "SurfacePosition",
     "Terminal",
     "UseAfterCloseError",
