@@ -20,7 +20,10 @@ if [[ -z "${COMMIT}" ]]; then
 fi
 
 echo ">> Fetching ${UPSTREAM_URL} at ${COMMIT}"
-rm -rf "${GHOSTTY_DIR}"
+# Invalidate any previously built static lib: it was linked against the old
+# vendored source, and `just build` reuses a cached lib without rebuilding, so a
+# stale one would be linked against the freshly fetched commit.
+rm -rf "${GHOSTTY_DIR}" "${VENDOR_DIR}/dist"
 mkdir -p "${GHOSTTY_DIR}"
 git -C "${GHOSTTY_DIR}" init -q
 git -C "${GHOSTTY_DIR}" remote add origin "${UPSTREAM_URL}"
