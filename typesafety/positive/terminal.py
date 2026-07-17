@@ -8,7 +8,17 @@ from __future__ import annotations
 
 from typing import assert_type
 
-from ghostty_vt import Cursor, Mode, Screen, Terminal
+from ghostty_vt import (
+    Cursor,
+    GridRef,
+    Mode,
+    Point,
+    PointTag,
+    RenderState,
+    Screen,
+    Terminal,
+    TrackedGridRef,
+)
 
 # Construction takes cell dimensions and yields the terminal type; scrollback is
 # an optional keyword-only integer.
@@ -46,6 +56,13 @@ assert_type(term.scroll_to_top(), None)
 assert_type(term.scroll_to_bottom(), None)
 assert_type(term.scroll_by(-1), None)
 assert_type(term.scroll_to_row(0), None)
+
+# The terminal is the factory for the screen-inspection domains.
+_point = Point(PointTag.ACTIVE, 0, 0)
+assert_type(term.grid_ref(_point), GridRef)
+assert_type(term.track_grid_ref(_point), TrackedGridRef)
+assert_type(term.render_state(), RenderState)
+assert_type(term.format(), str)
 
 # Lifecycle: explicit close, and use as a context manager binding the terminal.
 assert_type(term.close(), None)

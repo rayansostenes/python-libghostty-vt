@@ -149,6 +149,17 @@ def test_extreme_dimensions_are_accepted() -> None:
         assert term.rows == 65535
 
 
+def test_scrollback_retains_scrolled_rows() -> None:
+    # With scrollback, a row that scrolls off the top is kept in history rather
+    # than discarded, so it remains addressable through the grid-ref domain.
+    from ghostty_vt import Point, PointTag
+
+    with Terminal(5, 2, scrollback=1024) as term:
+        term.feed(b"TOP\r\nA\r\nB\r\nC")
+        history = term.grid_ref(Point(PointTag.HISTORY, 0, 0))
+        assert history.cell().text == "T"
+
+
 def test_context_manager_returns_the_terminal() -> None:
     with Terminal(10, 3) as term:
         assert isinstance(term, Terminal)
