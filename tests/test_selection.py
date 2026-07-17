@@ -108,6 +108,17 @@ def test_word_boundaries_split_on_extra_characters() -> None:
         assert split.text() == "foo"
 
 
+def test_word_empty_boundaries_uses_default_word_bounds() -> None:
+    # An empty boundary set is not an explicit "no boundaries" request: it falls
+    # back to upstream's default word bounds, matching `boundaries=None`.
+    with _terminal() as term:
+        term.feed(b"foo bar baz")
+        default = Selection.word(term, _active(5, 0))
+        empty = Selection.word(term, _active(5, 0), boundaries="")
+        assert default.text() == "bar"
+        assert empty.text() == "bar"
+
+
 # --- word_between -----------------------------------------------------------
 
 
@@ -358,6 +369,30 @@ def test_selection_after_resize_reflows_with_the_screen() -> None:
         term.resize(10, 3)
         # The reflowed content wraps; a fresh whole-screen selection sees it.
         assert Selection.all(term).text() == "abcdefghij\n klmnop"
+
+
+def test_selection_follows_its_cells_into_scrollback() -> None:
+    # A selection anchors to its cells: as content scrolls into history, the
+    # same selection keeps reporting that content rather than the cells that
+    # now occupy those screen positions.
+    with _terminal(10, 3, scrollback=100) as term:
+        term.feed(b"hello")
+        sel = Selection.point_to_point(term, _active(0, 0), _active(4, 0))
+        assert sel.text() == "hello"
+        term.feed(b"\r\none\r\ntwo\r\nthree\r\nfour")
+        assert sel.text() == "hello"
+        assert sel.start == Point(SCREEN, 0, 0)
+
+
+def test_selection_reused_after_resize_tracks_its_cells() -> None:
+    with _terminal(20, 3) as term:
+        term.feed(b"abcdefghij klmnop")
+        sel = Selection.point_to_point(term, _active(0, 0), _active(9, 0))
+        assert sel.text() == "abcdefghij"
+        term.resize(10, 3)
+        # The anchored endpoints reflow with the screen; the run still reads the
+        # original cells rather than going stale.
+        assert sel.text() == "abcdefghij"
 
 
 # --- lifetime ---------------------------------------------------------------
