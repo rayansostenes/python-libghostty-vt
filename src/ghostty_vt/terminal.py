@@ -158,12 +158,13 @@ class Terminal:
             rows: The new height in cells (1 to 65535).
 
         Raises:
-            ValueError: If ``cols`` or ``rows`` is outside 1 to 65535.
             UseAfterCloseError: If the terminal has been closed.
+            ValueError: If ``cols`` or ``rows`` is outside 1 to 65535.
         """
+        handle = self._handle()
         _check_dimension("cols", cols)
         _check_dimension("rows", rows)
-        result = _lib.ghostty_terminal_resize(self._handle(), cols, rows, 0, 0)
+        result = _lib.ghostty_terminal_resize(handle, cols, rows, 0, 0)
         _result.check(result, "could not resize terminal")
 
     def close(self) -> None:
@@ -175,6 +176,7 @@ class Terminal:
         self._finalizer()
 
     def __enter__(self) -> Self:
+        self._handle()
         return self
 
     def __exit__(
