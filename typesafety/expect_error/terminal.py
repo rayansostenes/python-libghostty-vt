@@ -15,6 +15,7 @@ Terminal(80, 24, 100)  # expect-error: scrollback is keyword-only
 Terminal(80, 24).feed("text")  # expect-error: feed takes bytes, not str
 Terminal(80, 24).resize(100)  # expect-error: resize needs both dimensions
 Terminal(80, 24).does_not_exist  # expect-error: no such attribute
+Terminal(80, 24, scrollback="big")  # expect-error: scrollback must be an int
 _wrong: int = Terminal(80, 24).visible_text()  # expect-error: str is not an int
 Terminal(80, 24).get_mode(25)  # expect-error: get_mode takes a Mode, not an int
 Terminal(80, 24).set_mode(Mode.CURSOR_VISIBLE)  # expect-error: missing value
