@@ -7,10 +7,11 @@ the only surface with stability intent.
 
 Domains are organized into submodules; flagship names are re-exported here at the
 top level. This release covers the ``build_info`` tracer domain, the foundation
-domains — errors, shared types, and color — the core of the ``terminal`` domain
-(create, feed, read visible text, resize), the standalone sequence parsers
-``osc`` and ``sgr``, and the small encode/measure domains: paste, unicode, size
-report, color scheme, and focus. The remaining domains land in later milestones.
+domains — errors, shared types, and color — the device domain's query callbacks,
+the core of the ``terminal`` domain (create, feed, read visible text, resize),
+the standalone sequence parsers ``osc`` and ``sgr``, and the small encode/measure
+domains: paste, unicode, size report, color scheme, and focus. The remaining
+domains land in later milestones.
 
 The sequence parsers are reached through their submodules, ``ghostty_vt.osc`` and
 ``ghostty_vt.sgr``, so their generic names (``parse``, ``Command``, ``Attribute``)
@@ -29,6 +30,7 @@ from ghostty_vt.build_info import (
 )
 from ghostty_vt.color import Rgb
 from ghostty_vt.color_scheme import ColorScheme
+from ghostty_vt.device import DeviceAttributes, DeviceResponder
 from ghostty_vt.errors import (
     GhosttyVtError,
     InvalidValueError,
@@ -54,6 +56,8 @@ __all__ = [
     "GHOSTTY_COMMIT",
     "BuildInfo",
     "ColorScheme",
+    "DeviceAttributes",
+    "DeviceResponder",
     "FocusEvent",
     "GhosttyVtError",
     "InvalidValueError",
