@@ -12,7 +12,7 @@ from collections.abc import Callable
 
 import pytest
 
-from ghostty_vt import Terminal, UseAfterCloseError
+from ghostty_vt import Cursor, Mode, Screen, Terminal, UseAfterCloseError
 
 
 def test_new_terminal_reports_its_dimensions() -> None:
@@ -173,6 +173,18 @@ _CLOSED_OPERATIONS: list[Callable[[Terminal], object]] = [
     lambda t: t.resize(20, 5),
     lambda t: t.cols,
     lambda t: t.rows,
+    lambda t: t.cursor,
+    lambda t: t.active_screen,
+    lambda t: t.mouse_tracking,
+    lambda t: t.total_rows,
+    lambda t: t.scrollback_rows,
+    lambda t: t.viewport_active,
+    lambda t: t.get_mode(Mode.CURSOR_VISIBLE),
+    lambda t: t.set_mode(Mode.CURSOR_VISIBLE, False),
+    lambda t: t.scroll_to_top(),
+    lambda t: t.scroll_to_bottom(),
+    lambda t: t.scroll_by(-1),
+    lambda t: t.scroll_to_row(0),
 ]
 
 
@@ -218,3 +230,179 @@ def test_unreferenced_terminal_is_finalized() -> None:
     del term
     gc.collect()
     assert not finalizer.alive
+
+
+# --- Cursor and screen state -------------------------------------------------
+
+
+def test_fresh_cursor_is_at_origin_and_visible() -> None:
+    with Terminal(10, 3) as term:
+        assert term.cursor == Cursor(x=0, y=0, visible=True, pending_wrap=False)
+
+
+def test_cursor_tracks_printed_text() -> None:
+    with Terminal(10, 3) as term:
+        term.feed(b"abc")
+        assert term.cursor.x == 3
+        assert term.cursor.y == 0
+
+
+def test_cursor_position_follows_cursor_movement() -> None:
+    with Terminal(20, 5) as term:
+        # CUP to row 3, col 7 (1-based in the escape) -> 0-based (6, 2).
+        term.feed(b"\x1b[3;7H")
+        assert term.cursor.x == 6
+        assert term.cursor.y == 2
+
+
+def test_cursor_pending_wrap_at_right_margin() -> None:
+    with Terminal(5, 3) as term:
+        term.feed(b"abcde")
+        # Cursor stays on the last column with a wrap pending until the next
+        # character actually wraps.
+        assert term.cursor.pending_wrap is True
+        assert term.cursor.x == 4
+
+
+def test_hiding_the_cursor_updates_visibility() -> None:
+    with Terminal(10, 3) as term:
+        term.feed(b"\x1b[?25l")
+        assert term.cursor.visible is False
+        term.feed(b"\x1b[?25h")
+        assert term.cursor.visible is True
+
+
+def test_new_terminal_is_on_the_primary_screen() -> None:
+    with Terminal(10, 3) as term:
+        assert term.active_screen is Screen.PRIMARY
+
+
+def test_alternate_screen_switch_is_observable() -> None:
+    with Terminal(10, 3) as term:
+        term.feed(b"\x1b[?1049h")
+        on_alternate = term.active_screen
+        term.feed(b"\x1b[?1049l")
+        back_on_primary = term.active_screen
+        assert on_alternate is Screen.ALTERNATE
+        assert back_on_primary is Screen.PRIMARY
+
+
+def test_mouse_tracking_reflects_mode() -> None:
+    with Terminal(10, 3) as term:
+        assert term.mouse_tracking is False
+        term.feed(b"\x1b[?1000h")
+        assert term.mouse_tracking is True
+
+
+# --- Modes -------------------------------------------------------------------
+
+
+def test_mode_set_by_escape_is_observable_through_query() -> None:
+    with Terminal(10, 3) as term:
+        assert term.get_mode(Mode.BRACKETED_PASTE) is False
+        term.feed(b"\x1b[?2004h")
+        assert term.get_mode(Mode.BRACKETED_PASTE) is True
+
+
+def test_set_mode_reflects_in_query() -> None:
+    with Terminal(10, 3) as term:
+        term.set_mode(Mode.BRACKETED_PASTE, True)
+        assert term.get_mode(Mode.BRACKETED_PASTE) is True
+        term.set_mode(Mode.BRACKETED_PASTE, False)
+        assert term.get_mode(Mode.BRACKETED_PASTE) is False
+
+
+def test_set_mode_and_screen_state_agree() -> None:
+    # DEC 25 is both a mode and a screen-state field; the two views agree.
+    with Terminal(10, 3) as term:
+        term.set_mode(Mode.CURSOR_VISIBLE, False)
+        assert term.get_mode(Mode.CURSOR_VISIBLE) is False
+        assert term.cursor.visible is False
+
+
+def test_ansi_and_dec_modes_are_distinct() -> None:
+    # ANSI 4 (INSERT) and DEC 4 (SLOW_SCROLL) share a number but are separate.
+    with Terminal(10, 3) as term:
+        term.set_mode(Mode.INSERT, True)
+        assert term.get_mode(Mode.INSERT) is True
+        assert term.get_mode(Mode.SLOW_SCROLL) is False
+
+
+# --- Scrollback --------------------------------------------------------------
+
+
+def test_no_scrollback_by_default() -> None:
+    with Terminal(5, 2) as term:
+        for i in range(6):
+            term.feed(f"row{i}\r\n".encode())
+        assert term.scrollback_rows == 0
+
+
+def test_scrollback_retains_scrolled_off_lines() -> None:
+    with Terminal(5, 2, scrollback=100) as term:
+        for i in range(6):
+            term.feed(f"row{i}\r\n".encode())
+        assert term.scrollback_rows > 0
+        assert term.total_rows > term.rows
+
+
+def test_scrollback_content_is_reachable_beyond_the_visible_area() -> None:
+    with Terminal(5, 2, scrollback=100) as term:
+        for i in range(6):
+            term.feed(f"row{i}\r\n".encode())
+        text = term.visible_text()
+        # row0 has scrolled off the two visible rows but remains reachable.
+        assert "row0" in text
+        assert "row5" in text
+
+
+def test_new_rejects_negative_scrollback() -> None:
+    with pytest.raises(ValueError, match="scrollback must be non-negative"):
+        Terminal(10, 3, scrollback=-1)
+
+
+def test_viewport_starts_pinned_to_the_active_area() -> None:
+    with Terminal(5, 2, scrollback=100) as term:
+        term.feed(b"a\r\nb\r\nc\r\nd")
+        assert term.viewport_active is True
+
+
+def test_scroll_to_top_moves_off_the_active_area() -> None:
+    with Terminal(5, 2, scrollback=100) as term:
+        for i in range(6):
+            term.feed(f"row{i}\r\n".encode())
+        term.scroll_to_top()
+        assert term.viewport_active is False
+
+
+def test_scroll_to_bottom_returns_to_the_active_area() -> None:
+    with Terminal(5, 2, scrollback=100) as term:
+        for i in range(6):
+            term.feed(f"row{i}\r\n".encode())
+        term.scroll_to_top()
+        term.scroll_to_bottom()
+        assert term.viewport_active is True
+
+
+def test_scroll_by_negative_delta_scrolls_up() -> None:
+    with Terminal(5, 2, scrollback=100) as term:
+        for i in range(6):
+            term.feed(f"row{i}\r\n".encode())
+        term.scroll_by(-2)
+        assert term.viewport_active is False
+
+
+def test_scroll_to_row_positions_the_viewport() -> None:
+    with Terminal(5, 2, scrollback=100) as term:
+        for i in range(6):
+            term.feed(f"row{i}\r\n".encode())
+        term.scroll_to_row(0)
+        assert term.viewport_active is False
+
+
+def test_scroll_to_row_rejects_negative_rows() -> None:
+    with (
+        Terminal(5, 2, scrollback=100) as term,
+        pytest.raises(ValueError, match="row must be non-negative"),
+    ):
+        term.scroll_to_row(-1)

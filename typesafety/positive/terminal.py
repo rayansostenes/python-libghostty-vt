@@ -8,11 +8,14 @@ from __future__ import annotations
 
 from typing import assert_type
 
-from ghostty_vt import Terminal
+from ghostty_vt import Cursor, Mode, Screen, Terminal
 
 # Construction takes cell dimensions and yields the terminal type.
 term = Terminal(80, 24)
 assert_type(term, Terminal)
+
+# Scrollback is an optional keyword-only int.
+assert_type(Terminal(80, 24, scrollback=100), Terminal)
 
 # Dimensions read back as integers.
 assert_type(term.cols, int)
@@ -24,6 +27,26 @@ assert_type(term.visible_text(), str)
 
 # Resizing takes dimensions and returns nothing.
 assert_type(term.resize(100, 40), None)
+
+# Screen-state queries have precise types.
+assert_type(term.cursor, Cursor)
+assert_type(term.cursor.x, int)
+assert_type(term.cursor.visible, bool)
+assert_type(term.active_screen, Screen)
+assert_type(term.mouse_tracking, bool)
+assert_type(term.total_rows, int)
+assert_type(term.scrollback_rows, int)
+assert_type(term.viewport_active, bool)
+
+# Modes are read and written through the Mode enum.
+assert_type(term.get_mode(Mode.CURSOR_VISIBLE), bool)
+assert_type(term.set_mode(Mode.CURSOR_VISIBLE, True), None)
+
+# Viewport scrolling returns nothing.
+assert_type(term.scroll_to_top(), None)
+assert_type(term.scroll_to_bottom(), None)
+assert_type(term.scroll_by(-1), None)
+assert_type(term.scroll_to_row(0), None)
 
 # Lifecycle: explicit close, and use as a context manager binding the terminal.
 assert_type(term.close(), None)
