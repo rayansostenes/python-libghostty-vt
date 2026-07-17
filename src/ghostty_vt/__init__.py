@@ -7,7 +7,7 @@ the only surface with stability intent.
 
 Domains are organized into submodules; flagship names are re-exported here at the
 top level. This release covers the ``build_info`` tracer domain plus the error
-hierarchy; the remaining domains land in later milestones.
+hierarchy and shared value types; the remaining domains land in later milestones.
 """
 
 from __future__ import annotations
@@ -27,6 +27,7 @@ from ghostty_vt.errors import (
     OutOfMemoryError,
     OutOfSpaceError,
 )
+from ghostty_vt.types import Point, PointTag, SurfacePosition
 
 __all__ = [
     "GHOSTTY_COMMIT",
@@ -37,6 +38,9 @@ __all__ = [
     "OptimizeMode",
     "OutOfMemoryError",
     "OutOfSpaceError",
+    "Point",
+    "PointTag",
+    "SurfacePosition",
     "__version__",
     "build_info",
 ]
