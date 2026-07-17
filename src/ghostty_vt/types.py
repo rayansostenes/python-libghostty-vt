@@ -13,9 +13,34 @@ from dataclasses import dataclass
 
 from ghostty_vt import _raw
 
-__all__ = ["Point", "PointTag", "SurfacePosition"]
+__all__ = ["Mods", "Point", "PointTag", "SurfacePosition"]
 
 _lib = _raw.lib
+
+
+class Mods(enum.Flag):
+    """Keyboard modifiers held during an input event.
+
+    A bitmask combining the active modifier keys. Members compose with ``|`` and
+    are tested with ``in``; the empty combination is :attr:`NONE`. The ``*_SIDE``
+    members distinguish the right key from the left and are only meaningful when
+    the matching base modifier is also set, on platforms that report it.
+    """
+
+    # Bit positions match Ghostty's GHOSTTY_MODS_* header constants; they are a
+    # stable part of the C ABI but are #define macros the raw layer does not
+    # expose, so they are pinned here directly.
+    NONE = 0
+    SHIFT = 1 << 0
+    CTRL = 1 << 1
+    ALT = 1 << 2
+    SUPER = 1 << 3
+    CAPS_LOCK = 1 << 4
+    NUM_LOCK = 1 << 5
+    SHIFT_SIDE = 1 << 6
+    CTRL_SIDE = 1 << 7
+    ALT_SIDE = 1 << 8
+    SUPER_SIDE = 1 << 9
 
 
 class PointTag(enum.Enum):

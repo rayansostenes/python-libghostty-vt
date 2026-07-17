@@ -8,7 +8,21 @@ from __future__ import annotations
 
 from typing import assert_type
 
-from ghostty_vt import Point, PointTag, SurfacePosition
+from ghostty_vt import Mods, Point, PointTag, SurfacePosition
+
+# Modifiers are a flag enum: members and their combinations share the enum type.
+_none: Mods = Mods.NONE
+_shift: Mods = Mods.SHIFT
+_ctrl: Mods = Mods.CTRL
+_alt: Mods = Mods.ALT
+_super: Mods = Mods.SUPER
+_caps: Mods = Mods.CAPS_LOCK
+_num: Mods = Mods.NUM_LOCK
+_shift_side: Mods = Mods.SHIFT_SIDE
+_ctrl_side: Mods = Mods.CTRL_SIDE
+_alt_side: Mods = Mods.ALT_SIDE
+_super_side: Mods = Mods.SUPER_SIDE
+_combined: Mods = Mods.CTRL | Mods.SHIFT
 
 # A point carries its tag and integer coordinates.
 point = Point(PointTag.ACTIVE, 3, 7)
