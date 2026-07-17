@@ -6,11 +6,16 @@
 # line errors.
 from __future__ import annotations
 
-from ghostty_vt import Terminal
+from ghostty_vt import Mode, Terminal
 
 Terminal()  # expect-error: missing cols and rows
 Terminal("80", 24)  # expect-error: cols must be an int
+Terminal(80, 24, 100)  # expect-error: scrollback is keyword-only
 Terminal(80, 24).feed("text")  # expect-error: feed takes bytes, not str
 Terminal(80, 24).resize(100)  # expect-error: resize needs both dimensions
 Terminal(80, 24).does_not_exist  # expect-error: no such attribute
 _wrong: int = Terminal(80, 24).visible_text()  # expect-error: str is not an int
+Terminal(80, 24).get_mode(25)  # expect-error: get_mode takes a Mode, not an int
+Terminal(80, 24).set_mode(Mode.CURSOR_VISIBLE)  # expect-error: missing value
+Terminal(80, 24).cursor.x = 5  # expect-error: Cursor is frozen
+Terminal(80, 24).scroll_by("1")  # expect-error: rows must be an int
