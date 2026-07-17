@@ -117,7 +117,7 @@ def _normalize(raw_path: str, include_dir: Path) -> str:
     path = Path(raw_path)
     try:
         return path.resolve().relative_to(include_dir.resolve()).as_posix()
-    except ValueError, OSError:
+    except (ValueError, OSError):
         return path.name
 
 
@@ -182,10 +182,13 @@ def _split_declarations(body: str) -> list[str]:
 
 def _blame(prior: str, section: Section, error: Exception) -> GeneratorError:
     """Pinpoint the declaration in ``section`` that cffi rejected."""
+    probe = cffi.FFI()
+    if prior:
+        probe.cdef(prior)
+    # Feed the section's declarations cumulatively on one FFI so a decl that
+    # legitimately depends on an earlier decl in this same section is not blamed
+    # for the earlier type being "undefined"; only the genuinely bad decl fails.
     for decl in _split_declarations(section.body):
-        probe = cffi.FFI()
-        if prior:
-            probe.cdef(prior)
         try:
             probe.cdef(decl)
         except _CDEF_ERRORS:

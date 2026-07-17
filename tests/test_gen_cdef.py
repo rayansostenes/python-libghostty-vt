@@ -120,6 +120,25 @@ def test_verify_blames_the_offending_header_and_declaration() -> None:
     assert "int z" in message
 
 
+def test_verify_blames_the_bad_decl_past_an_in_section_dependency() -> None:
+    # A valid decl (B) depends on a type (A) defined earlier in the same section;
+    # the genuinely malformed decl (C) comes after. Blame must land on C, not on
+    # the innocent dependent B parsed in isolation.
+    bad = Section(
+        header="ghostty/vt/broken.h",
+        body=(
+            "typedef struct { int x; } A;\n"
+            "typedef struct { A a; } B;\n"
+            "typedef struct { int z } C;"
+        ),
+    )
+    with pytest.raises(GeneratorError) as excinfo:
+        verify([bad])
+    message = str(excinfo.value)
+    assert "int z" in message
+    assert "} B;" not in message
+
+
 def test_verify_accepts_a_valid_dependency_chain() -> None:
     sections = [
         Section("a.h", "typedef struct { int x; } A;"),
