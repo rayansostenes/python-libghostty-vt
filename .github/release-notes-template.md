@@ -8,8 +8,8 @@ publish (see .github/workflows/wheels.yml), so this template just makes the
 information visible while drafting.
 
 The release tag MUST equal the package version (a leading `v` is allowed, e.g.
-tag `v0.1.0` for version `0.1.0`). Read the version from src/ghostty_vt/__init__.py
-(__version__) and the pinned commit from ghostty-commit.txt.
+tag `v0.1.0` for version `0.1.0`). Read the version from pyproject.toml
+(project.version) and the pinned commit from ghostty-commit.txt.
 -->
 
 ## Highlights
