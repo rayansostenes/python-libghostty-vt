@@ -17,8 +17,74 @@ permissions:
   contents: read
 
 jobs:
-  checks:
-    name: checks (${{ matrix.os }})
+  lint:
+    name: lint / format
+    runs-on: ubuntu-latest
+    # Pure static analysis of the source tree — ruff never imports the package,
+    # so this needs neither the vendored upstream nor the built extension. Its
+    # verdict is platform-independent, so a single OS suffices.
+    env:
+      # `uv run` inside the recipes must not sync (and thus build) the project;
+      # the `uv sync --no-install-project` step below installs only the tools.
+      UV_NO_SYNC: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv (with Python 3.14)
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.14"
+          enable-cache: true
+
+      - name: Install just
+        uses: extractions/setup-just@v2
+
+      # Install the dev tools (ruff, ...) without building the project itself:
+      # the raw-layer extension requires `just vendor` + a zig build, and lint
+      # does not need it.
+      - name: Install tooling (no project build)
+        run: uv sync --no-install-project
+
+      - name: Lint (ruff)
+        run: just lint
+
+      - name: Format check (ruff)
+        run: just fmt-check
+
+  typecheck:
+    name: typecheck
+    runs-on: ubuntu-latest
+    # mypy and pyright read the source tree directly; the raw layer is typed by
+    # its hand-written _raw.pyi stub, the authoritative type source, so the
+    # compiled extension is not required (pyright's reportMissingModuleSource is
+    # off precisely so the stub stands in for the unbuilt module). No vendor, no
+    # build, single OS — the strict verdict is platform-independent.
+    env:
+      # `uv run` inside the recipe must not sync (and thus build) the project;
+      # the `uv sync --no-install-project` step below installs only the checkers.
+      UV_NO_SYNC: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv (with Python 3.14)
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.14"
+          enable-cache: true
+
+      - name: Install just
+        uses: extractions/setup-just@v2
+
+      # Install mypy/pyright (and their stubs) without building the project: the
+      # extension is typed by _raw.pyi, so no vendored source or zig build.
+      - name: Install tooling (no project build)
+        run: uv sync --no-install-project
+
+      - name: Type-check (mypy + pyright, strict)
+        run: just typecheck
+
+  test:
+    name: test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       # Report both platforms' verdicts even when one fails.
@@ -54,15 +120,6 @@ jobs:
 
       - name: Build the raw-layer extension
         run: just build
-
-      - name: Lint (ruff)
-        run: just lint
-
-      - name: Format check (ruff)
-        run: just fmt-check
-
-      - name: Type-check (mypy + pyright, strict)
-        run: just typecheck
 
       - name: Tests with 100% coverage gate
         run: just test
