@@ -141,6 +141,40 @@ def test_kitty_ctrl_c_press_uses_the_protocol_form() -> None:
     assert KITTY_ALL.encode(event) == b"\x1b[99;5u"
 
 
+def test_kitty_report_events_encodes_the_release_event_type() -> None:
+    # REPORT_EVENTS makes releases reportable; the ``:3`` suffix is the release
+    # event type. Without the flag a bare key release produces no output.
+    encoder = KeyEncoder(kitty_flags=KittyFlags.REPORT_EVENTS)
+    event = KeyEvent(
+        Key.A, text="a", unshifted_codepoint=ord("a"), action=KeyAction.RELEASE
+    )
+    assert encoder.encode(event) == b"\x1b[97;1:3u"
+
+
+def test_kitty_report_alternates_encodes_the_shifted_key_code() -> None:
+    # REPORT_ALTERNATES appends the shifted layout code after the base code,
+    # separated by ``:``, here base ``97`` (a) and shifted ``65`` (A).
+    encoder = KeyEncoder(kitty_flags=KittyFlags.REPORT_ALTERNATES)
+    event = KeyEvent(Key.A, Mods.SHIFT, text="A", unshifted_codepoint=ord("a"))
+    assert encoder.encode(event) == b"\x1b[97:65;2u"
+
+
+def test_kitty_report_all_encodes_a_plain_key_as_an_escape_sequence() -> None:
+    # REPORT_ALL forces every key to the escape-code form; a plain ``a`` that
+    # otherwise encodes to its literal byte becomes the ``97u`` sequence.
+    encoder = KeyEncoder(kitty_flags=KittyFlags.REPORT_ALL)
+    event = KeyEvent(Key.A, text="a", unshifted_codepoint=ord("a"))
+    assert encoder.encode(event) == b"\x1b[97u"
+
+
+def test_kitty_report_associated_encodes_the_text_codepoint() -> None:
+    # REPORT_ASSOCIATED appends the associated text codepoint as a third field;
+    # here shifted A carries modifier ``2`` and associated codepoint ``65``.
+    encoder = KeyEncoder(kitty_flags=KittyFlags.REPORT_ASSOCIATED)
+    event = KeyEvent(Key.A, Mods.SHIFT, text="A", unshifted_codepoint=ord("a"))
+    assert encoder.encode(event) == b"\x1b[97;2;65u"
+
+
 def test_kitty_all_enables_every_flag() -> None:
     assert KittyFlags.ALL == (
         KittyFlags.DISAMBIGUATE
@@ -204,15 +238,32 @@ def test_key_event_rejects_control_characters_in_text(bad: str) -> None:
 
 def test_key_event_rejects_private_use_function_codes_in_text() -> None:
     with pytest.raises(ValueError, match="private-use function codes"):
-        KeyEvent(Key.A, text="")
+        KeyEvent(Key.A, text="\uf704")
+
+
+@pytest.mark.parametrize("bad", [b"a", 123, ["a"]])
+def test_key_event_rejects_non_str_text(bad: object) -> None:
+    with pytest.raises(TypeError, match="text must be a str"):
+        KeyEvent(Key.A, text=bad)  # type: ignore[arg-type]
+
+
+def test_key_event_rejects_non_bool_composing() -> None:
+    with pytest.raises(TypeError, match="composing must be a bool"):
+        KeyEvent(Key.A, composing=1)  # type: ignore[arg-type]
 
 
 def test_key_event_accepts_non_ascii_text() -> None:
-    assert LEGACY.encode(KeyEvent(Key.UNIDENTIFIED, text="é")) == "é".encode()
+    assert LEGACY.encode(KeyEvent(Key.UNIDENTIFIED, text="\u00e9")) == "\u00e9".encode()
 
 
 def test_key_event_accepts_boundary_unshifted_codepoint() -> None:
     assert KeyEvent(Key.A, unshifted_codepoint=0x10FFFF).unshifted_codepoint == 0x10FFFF
+
+
+@pytest.mark.parametrize("bad", [1.5, True, "97"])
+def test_key_event_rejects_non_int_unshifted_codepoint(bad: object) -> None:
+    with pytest.raises(TypeError, match="unshifted_codepoint must be an int"):
+        KeyEvent(Key.A, unshifted_codepoint=bad)  # type: ignore[arg-type]
 
 
 @pytest.mark.parametrize("bad", [-1, 0x110000])

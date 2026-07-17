@@ -294,6 +294,8 @@ def _validate_text(text: str) -> None:
     # the associated text must be the unmodified character(s). Upstream rejects
     # C0 controls, DEL, and the macOS function-key private-use range; guard them
     # here so misuse is a Python error rather than undefined native behavior.
+    if not isinstance(text, str):  # pyright: ignore[reportUnnecessaryIsInstance]
+        raise TypeError(f"text must be a str, got {type(text).__name__}")
     for char in text:
         code = ord(char)
         if code <= 0x1F or code == 0x7F:
@@ -324,8 +326,9 @@ class KeyEvent:
         composing: Whether the event is part of an active dead-key composition.
 
     Raises:
-        TypeError: If ``key``, ``action``, ``mods``, or ``consumed_mods`` is not
-            of its expected type.
+        TypeError: If ``key``, ``action``, ``mods``, ``consumed_mods``,
+            ``text``, ``composing``, or ``unshifted_codepoint`` is not of its
+            expected type.
         ValueError: If ``text`` contains a forbidden character or
             ``unshifted_codepoint`` is outside the Unicode range.
     """
@@ -355,14 +358,26 @@ class KeyEvent:
             raise TypeError(
                 f"consumed_mods must be a Mods, got {type(self.consumed_mods).__name__}"
             )
-        _validate_text(self.text)
-        if self.unshifted_codepoint is not None and not (
-            0 <= self.unshifted_codepoint <= _MAX_CODEPOINT
-        ):
-            raise ValueError(
-                "unshifted_codepoint out of range (0-0x10FFFF): "
-                f"{self.unshifted_codepoint}"
+        if not isinstance(self.composing, bool):  # pyright: ignore[reportUnnecessaryIsInstance]
+            raise TypeError(
+                f"composing must be a bool, got {type(self.composing).__name__}"
             )
+        _validate_text(self.text)
+        if self.unshifted_codepoint is not None:
+            # bool is an int subclass, so exclude it explicitly: True/False are
+            # never a meaningful codepoint and would otherwise pass as 1/0.
+            if not isinstance(self.unshifted_codepoint, int) or isinstance(  # pyright: ignore[reportUnnecessaryIsInstance]
+                self.unshifted_codepoint, bool
+            ):
+                raise TypeError(
+                    "unshifted_codepoint must be an int or None, got "
+                    f"{type(self.unshifted_codepoint).__name__}"
+                )
+            if not (0 <= self.unshifted_codepoint <= _MAX_CODEPOINT):
+                raise ValueError(
+                    "unshifted_codepoint out of range (0-0x10FFFF): "
+                    f"{self.unshifted_codepoint}"
+                )
 
 
 @dataclass(frozen=True, slots=True)
@@ -502,8 +517,12 @@ def _encode_event(encoder: Any, event: KeyEvent) -> bytes:
 def _encode_raw(encoder: Any, raw_event: Any) -> bytes:
     out_len = _ffi.new("size_t *")
     # A NULL buffer reports the required size: OUT_OF_SPACE with the length when
-    # there is output, SUCCESS with length 0 when the event produces none.
-    _lib.ghostty_key_encoder_encode(encoder, raw_event, _ffi.NULL, 0, out_len)
+    # there is output, SUCCESS with length 0 when the event produces none. Any
+    # other result is a genuine failure and must raise rather than be read as
+    # "no output" (out_len stays zero-initialized on an error).
+    sizing = _lib.ghostty_key_encoder_encode(encoder, raw_event, _ffi.NULL, 0, out_len)
+    if sizing != _lib.GHOSTTY_OUT_OF_SPACE:
+        _result.check(sizing, "could not encode key event")
     needed = out_len[0]
     if needed == 0:
         return b""
