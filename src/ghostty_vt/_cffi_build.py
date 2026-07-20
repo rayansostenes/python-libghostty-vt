@@ -8,7 +8,8 @@ excluded from the test-coverage scope.
 The extension statically links the zig-built ``libghostty-vt`` and compiles
 against the vendored upstream headers. When the static library is absent (e.g. a
 clean wheel build from the sdist), it is built here with the pinned zig toolchain
-from the vendored source, offline. The pinned upstream commit is read from
+from the vendored source — hermetically when the zig package cache is populated
+(see ``_build_static_lib``). The pinned upstream commit is read from
 ``ghostty-commit.txt`` and baked into the extension so the runtime value can
 never drift from the artifact it was compiled against.
 """
@@ -47,9 +48,9 @@ DIST_LIB_DIR = VENDOR_DIR / "dist" / "lib"
 ZIG_CACHE_DIR = VENDOR_DIR / "zig-cache"
 
 # Kept in lockstep with scripts/_lib.sh: the offline build must use the same
-# options the vendoring prefetch walked, or a lazy zig dependency could be
-# missing. Like _lib.sh, the optimize mode honors the ZIG_OPTIMIZE override and
-# defaults to ReleaseFast.
+# options as the cache-populating builds in fetch-vendor.sh, or a lazy zig
+# dependency could be missing. Like _lib.sh, the optimize mode honors the
+# ZIG_OPTIMIZE override and defaults to ReleaseFast.
 # `-Dcpu=baseline` (as in _lib.sh) pins codegen to the portable baseline for
 # the target arch instead of the build host's native CPU, so cached CI libs and
 # release wheels run on any machine of that arch. Ghostty's SIMD hot paths are
@@ -80,12 +81,22 @@ def _build_static_lib() -> Path:
         raise FileNotFoundError(
             f"vendored source missing at {GHOSTTY_DIR}; run 'just vendor' first"
         )
+    # With a populated package cache (a repo checkout after `just vendor`, or
+    # CI where cibuildwheel copies vendor/ into the build environment),
+    # --system disables zig's fetching entirely: the build is hermetic and a
+    # missing dependency fails loudly instead of silently reaching for the
+    # network. From a bare sdist there is no cache (bundling it would exceed
+    # PyPI size limits), so zig fetches the build.zig.zon-pinned,
+    # hash-verified dependencies over the network instead.
+    package_cache = ZIG_CACHE_DIR / "p"
+    system_mode = ["--system", str(package_cache)] if package_cache.is_dir() else []
     subprocess.run(
         [
             sys.executable,
             "-m",
             "ziglang",
             "build",
+            *system_mode,
             *_ZIG_BUILD_OPTS,
             "--prefix",
             str(VENDOR_DIR / "dist"),

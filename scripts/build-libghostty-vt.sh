@@ -3,7 +3,9 @@
 # Build the static libghostty-vt from the vendored source using the pinned zig
 # toolchain (provided by the `ziglang` dev dependency). Runs with no network
 # access: all zig dependencies must already be present in vendor/zig-cache,
-# populated by scripts/fetch-vendor.sh.
+# populated by scripts/fetch-vendor.sh. `--system` makes that a guarantee
+# rather than a hope — zig's fetching is disabled and a missing dependency is
+# a hard error instead of a silent network fallback.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -19,7 +21,8 @@ fi
 
 echo ">> Building static libghostty-vt (optimize=${OPTIMIZE})"
 rm -rf "${OUT_DIR}"
-zig_build "${ZIG_BUILD_OPTS[@]}" --prefix "${OUT_DIR}"
+zig_build "${GHOSTTY_DIR}" --system "${ZIG_CACHE_DIR}/p" \
+    "${ZIG_BUILD_OPTS[@]}" --prefix "${OUT_DIR}"
 
 # The static lib is named per platform: on Windows it is renamed to avoid
 # colliding with the DLL import library (see upstream build.zig).

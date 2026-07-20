@@ -36,17 +36,19 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v8.3.2
 
-      # Populate vendor/ (upstream source at the pinned commit + prefetched zig
-      # deps) so the sdist bundles it and builds offline downstream.
+      # Vendor the libghostty-vt-only source at the pinned commit; that trimmed
+      # tree is all the sdist bundles (the zig package cache stays out — its
+      # per-target union exceeds PyPI's file size limit).
       - name: Vendor upstream source
         run: bash scripts/fetch-vendor.sh
 
       - name: Build sdist
         run: uv build --sdist
 
-      # Verify the sdist is installable: a clean install compiles the extension
-      # from the bundled vendored source (no upstream network) and the suite
-      # passes against it.
+      # Verify the sdist is installable as a user would install it: pip builds
+      # in an isolated tree with no populated zig cache, so the extension build
+      # compiles the static lib from the bundled vendored source and lets zig
+      # fetch its hash-verified dependencies over the network.
       - name: Verify sdist installs and passes tests
         run: |
           uv venv
@@ -70,11 +72,26 @@ jobs:
         include:
           # Linux jobs build both manylinux and musllinux for their arch, which
           # is cibuildwheel's default, so these two runners cover all four Linux
-          # targets. aarch64 uses a native ARM runner (no QEMU emulation).
-          - { name: linux-x86_64, os: ubuntu-24.04, archs: x86_64 }
-          - { name: linux-aarch64, os: ubuntu-24.04-arm, archs: aarch64 }
-          - { name: macos-arm64, os: macos-14, archs: arm64 }
-          - { name: macos-x86_64, os: macos-15-intel, archs: x86_64 }
+          # targets. aarch64 uses a native ARM runner (no QEMU emulation). The
+          # vendoring host build covers the runner's own target; linux runners
+          # additionally vendor the musl target so the musllinux container's
+          # hermetic (--system) build finds its dependencies in the cache.
+          - name: linux-x86_64
+            os: ubuntu-24.04
+            archs: x86_64
+            vendor_targets: x86_64-linux-musl
+          - name: linux-aarch64
+            os: ubuntu-24.04-arm
+            archs: aarch64
+            vendor_targets: aarch64-linux-musl
+          - name: macos-arm64
+            os: macos-14
+            archs: arm64
+            vendor_targets: ""
+          - name: macos-x86_64
+            os: macos-15-intel
+            archs: x86_64
+            vendor_targets: ""
     steps:
       - uses: actions/checkout@v7
 
@@ -83,10 +100,18 @@ jobs:
 
       # Vendor on the host; cibuildwheel copies the whole working directory
       # (vendor/ included) into each build environment, so the static lib builds
-      # offline inside the manylinux/musllinux containers.
+      # hermetically (no network) inside the manylinux/musllinux containers.
       - name: Vendor upstream source
-        run: bash scripts/fetch-vendor.sh
+        run: bash scripts/fetch-vendor.sh ${{ matrix.vendor_targets }}
         shell: bash
+
+      # The vendoring host build leaves a runner-built static lib in
+      # vendor/dist. The container builds must not link it — it targets the
+      # runner's glibc, not manylinux's older baseline nor musl — so drop it
+      # and let each container compile its own from the shared zig cache.
+      - name: Drop the host-built static lib
+        if: runner.os == 'Linux'
+        run: rm -rf vendor/dist
 
       - name: Build wheels
         uses: pypa/cibuildwheel@v4.1.0

@@ -138,7 +138,7 @@ needed.
 A fresh clone reaches green tests with three documented commands:
 
 ```sh
-just vendor    # fetch upstream at the pinned commit + prefetch zig deps (network)
+just vendor    # vendor libghostty-vt at the pinned commit (network)
 just build     # build the raw-layer cffi extension in place (offline)
 just test      # run the test suite with 100% branch coverage enforced
 ```
@@ -149,7 +149,7 @@ implicitly on first use. The main recipes:
 
 ```sh
 just setup     # sync the dev environment (Python 3.14+, pinned zig)
-just vendor    # fetch upstream at the pinned commit + prefetch zig deps (network)
+just vendor    # vendor libghostty-vt at the pinned commit (network)
 just build     # build the raw-layer cffi extension in place (offline)
 just build-lib # build only the static libghostty-vt from vendored source (offline)
 just gen-cdef  # regenerate the raw-layer cdef from the vendored headers
@@ -171,10 +171,21 @@ they cannot silently rot.
 
 The single pinned upstream commit lives in
 [`ghostty-commit.txt`](ghostty-commit.txt) — exactly one place. `just vendor`
-fetches the Ghostty source at that commit into `vendor/ghostty/` (gitignored)
-and prefetches its zig build dependencies into `vendor/zig-cache/`, so
-`just build` runs with no network access. Upstream's MIT license notice is
-retained alongside the vendored source.
+checks out Ghostty at that commit, runs upstream's own
+`zig build dist -Demit-lib-vt=true` to produce the libghostty-vt-only source
+tarball (upstream maintains the list of app-only paths it excludes), and
+unpacks that tarball into `vendor/ghostty/` (gitignored) — the full Ghostty
+tree is never kept. It then builds the static lib for the host, which both
+populates the zig package cache in `vendor/zig-cache/` and proves the vendored
+tree builds; `just build` afterwards runs hermetically (`zig build --system`,
+no network). Upstream's MIT license notice is retained alongside the vendored
+source.
+
+The sdist bundles the trimmed vendored source but not the zig package cache
+(the per-target union exceeds PyPI's file size limit), so building from a bare
+sdist lets zig fetch its `build.zig.zon`-pinned, hash-verified dependencies
+over the network. Wheels are unaffected: they are prebuilt, and wheel CI builds
+hermetically from the populated cache.
 
 Bumping upstream is a one-hash edit to `ghostty-commit.txt` followed by
 `just vendor`. The pinned zig version tracks upstream's minimum and is bumped

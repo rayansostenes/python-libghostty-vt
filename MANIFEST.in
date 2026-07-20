@@ -1,7 +1,12 @@
-# Bundle everything the raw-layer extension needs to build offline from an
-# sdist: the pinned-commit file, the build shim, the vendored upstream source,
-# and the prefetched zig package cache. With these present, a wheel build never
-# touches the network.
+# Bundle what the raw-layer extension needs to build from an sdist: the
+# pinned-commit file, the build shim, and the vendored upstream source (the
+# libghostty-vt-only dist tarball, not the full Ghostty tree; see
+# scripts/fetch-vendor.sh). The zig package cache is deliberately NOT bundled:
+# the union of per-target dependencies exceeds PyPI's file size limit, so a
+# bare sdist build lets zig fetch the build.zig.zon-pinned, hash-verified
+# dependencies over the network. Builds from a repo checkout or in wheel CI
+# run hermetically against the populated vendor/zig-cache instead (see
+# _cffi_build.py).
 
 include ghostty-commit.txt
 include setup.py
@@ -11,16 +16,9 @@ include src/ghostty_vt/_cdef.h
 
 # Vendored upstream source (headers + zig build inputs).
 graft vendor/ghostty
-prune vendor/ghostty/.git
-# Host build artifacts from an in-tree build; zig rebuilds these from the
-# prefetched package cache, so shipping them only bloats the sdist.
+# Host build artifacts from an in-tree build; zig rebuilds these, so shipping
+# them only bloats the sdist.
 prune vendor/ghostty/.zig-cache
-
-# Prefetched zig dependencies: ship only the source-package cache (p/). Zig
-# rebuilds every other cache directory from it, so the local build-artifact and
-# hash-manifest caches are intentionally omitted (shipping stale h/ manifests
-# without their o/ outputs would break the offline build).
-graft vendor/zig-cache/p
 
 # Never ship compiled extensions in the sdist; they are built per-platform.
 global-exclude *.so *.pyd *.dylib *.a

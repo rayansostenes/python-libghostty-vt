@@ -8,9 +8,11 @@ default:
 setup:
     uv sync
 
-# Fetch upstream at the pinned commit and prefetch zig deps (needs network).
-vendor:
-    ./scripts/fetch-vendor.sh
+# Vendor libghostty-vt at the pinned commit and build it for the host (needs
+# network). Extra targets add their zig deps to the cache: `just vendor
+# x86_64-linux-musl`.
+vendor *targets:
+    ./scripts/fetch-vendor.sh {{targets}}
 
 # Build the static libghostty-vt from the vendored source (offline).
 build-lib:

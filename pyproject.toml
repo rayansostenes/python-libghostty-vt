@@ -32,8 +32,8 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 [tool.setuptools.package-data]
-# _cdef.h is the generated raw-layer cdef; it must ship in the sdist so an
-# offline wheel build can regenerate the extension from it.
+# _cdef.h is the generated raw-layer cdef; it must ship in the sdist so a
+# wheel build can regenerate the extension from it without the cdef generator.
 ghostty_vt = ["py.typed", "_raw.pyi", "_cdef.h"]
 
 [dependency-groups]
@@ -142,7 +142,8 @@ exclude_also = ["if TYPE_CHECKING:"]
 build = "cp314-*"
 # pypa/build honors build-system.requires, so the pinned `ziglang` toolchain is
 # provisioned inside every build environment (including the manylinux/musllinux
-# containers) and the offline static-lib build in _cffi_build.py just works.
+# containers) and the static-lib build in _cffi_build.py runs hermetically
+# against the vendored source and zig package cache copied in with the project.
 build-frontend = "build"
 # Verify every built wheel by installing it and running the suite against it, as
 # a user would. Coverage enforcement is a PR-CI concern, not a wheel concern, so
