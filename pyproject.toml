@@ -18,9 +18,9 @@ classifiers = [
 dependencies = ["cffi>=1.17"]
 
 [project.urls]
-Homepage = "https://github.com/rayancocos/python-libghostty-vt"
-Repository = "https://github.com/rayancocos/python-libghostty-vt"
-Issues = "https://github.com/rayancocos/python-libghostty-vt/issues"
+Homepage = "https://github.com/rayansostenes/python-libghostty-vt"
+Repository = "https://github.com/rayansostenes/python-libghostty-vt"
+Issues = "https://github.com/rayansostenes/python-libghostty-vt/issues"
 
 [build-system]
 # ziglang builds the static libghostty-vt from the vendored source at wheel
