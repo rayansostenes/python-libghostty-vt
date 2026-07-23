@@ -139,6 +139,11 @@ def _build() -> FFI:
         """,
         include_dirs=[str(INCLUDE_DIR)],
         extra_objects=[str(_static_lib())],
+        # The static lib uses POSIX shared memory; on the manylinux glibc
+        # baselines (< 2.34) shm_open/shm_unlink live in librt, not libc.
+        # Harmless elsewhere on Linux: modern glibc ships librt as a shim and
+        # musl as an empty stub. macOS has no librt (shm_* are in libc).
+        libraries=["rt"] if sys.platform == "linux" else [],
         # No abi3: cffi API mode targets a specific CPython (cp314 only), per the
         # v0.1 spec. Left on, cffi's setuptools hook would build a limited-API
         # (.abi3) extension.
