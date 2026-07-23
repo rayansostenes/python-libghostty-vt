@@ -49,9 +49,11 @@ jobs:
       # in an isolated tree with no populated zig cache, so the extension build
       # compiles the static lib from the bundled vendored source and lets zig
       # fetch its hash-verified dependencies over the network.
+      # --clear: the vendoring step's `uv sync` already left a dev .venv here;
+      # the verify env must contain only the sdist install and pytest.
       - name: Verify sdist installs and passes tests
         run: |
-          uv venv
+          uv venv --clear
           uv pip install "$(ls dist/*.tar.gz)" pytest
           .venv/bin/pytest tests -o addopts=
 

@@ -10,6 +10,7 @@ rather than dying opaquely.
 
 from __future__ import annotations
 
+import importlib.util
 import re
 from pathlib import Path
 
@@ -48,8 +49,18 @@ needs_vendor = pytest.mark.skipif(
     not INCLUDE_DIR.is_dir(), reason="vendored headers absent; run `just vendor`"
 )
 
+# The generator preprocesses headers with the pinned zig toolchain
+# (``python -m ziglang cc``). Wheel/sdist verification envs install only the
+# package and pytest — no zig — and the shipped extension is prebuilt, so the
+# toolchain-driven tests skip there instead of failing in ``preprocess``.
+needs_zig = pytest.mark.skipif(
+    importlib.util.find_spec("ziglang") is None,
+    reason="ziglang absent; generator tests need the pinned zig toolchain",
+)
+
 
 @needs_vendor
+@needs_zig
 def test_generated_cdef_matches_committed() -> None:
     # The regeneration recipe is deterministic for the pinned commit: rerunning
     # it must reproduce the committed file byte for byte, or it is stale.
@@ -58,6 +69,7 @@ def test_generated_cdef_matches_committed() -> None:
 
 
 @needs_vendor
+@needs_zig
 def test_generation_is_deterministic() -> None:
     first = generate_cdef(INCLUDE_DIR, commit=PINNED_COMMIT)
     second = generate_cdef(INCLUDE_DIR, commit=PINNED_COMMIT)
@@ -65,6 +77,7 @@ def test_generation_is_deterministic() -> None:
 
 
 @needs_vendor
+@needs_zig
 def test_generated_cdef_is_parseable_by_cffi() -> None:
     # The core acceptance: the hard subset produces a cdef cffi accepts.
     cdef = generate_cdef(INCLUDE_DIR, commit=PINNED_COMMIT)
@@ -72,6 +85,7 @@ def test_generated_cdef_is_parseable_by_cffi() -> None:
 
 
 @needs_vendor
+@needs_zig
 def test_generated_cdef_covers_the_hard_constructs() -> None:
     cdef = generate_cdef(INCLUDE_DIR, commit=PINNED_COMMIT)
     # Opaque-pointer handle typedef.
@@ -89,6 +103,7 @@ def test_generated_cdef_covers_the_hard_constructs() -> None:
 
 
 @needs_vendor
+@needs_zig
 def test_discovery_spans_the_full_surface_and_drops_non_contributors() -> None:
     # Discovery is what makes the raw layer complete by construction: every vt
     # header that contributes declarations is picked up, in dependency order.
@@ -113,6 +128,7 @@ def test_discovery_spans_the_full_surface_and_drops_non_contributors() -> None:
 
 
 @needs_vendor
+@needs_zig
 def test_full_surface_inline_helpers_are_prototypes_not_definitions() -> None:
     # modes.h ships `static inline` helpers; the cdef keeps them callable as bare
     # prototypes (a definition would make cffi reject the whole file).
@@ -139,6 +155,7 @@ def test_discover_headers_reports_an_empty_surface(tmp_path: Path) -> None:
 
 
 @needs_vendor
+@needs_zig
 def test_raw_layer_covers_every_exported_symbol() -> None:
     # The completeness gate (issue #7): every exported vt header symbol must be
     # callable from the compiled raw layer. The compiled extension is imported
@@ -149,6 +166,7 @@ def test_raw_layer_covers_every_exported_symbol() -> None:
 
 
 @needs_vendor
+@needs_zig
 def test_surface_symbols_are_a_subset_of_the_compiled_layer() -> None:
     from ghostty_vt import _raw
 
@@ -159,6 +177,7 @@ def test_surface_symbols_are_a_subset_of_the_compiled_layer() -> None:
 
 
 @needs_vendor
+@needs_zig
 def test_split_sections_reports_unreachable_header() -> None:
     preprocessed = preprocess(INCLUDE_DIR)
     with pytest.raises(GeneratorError, match=re.escape("ghostty/vt/nonexistent.h")):
@@ -170,6 +189,7 @@ def test_preprocess_missing_umbrella_names_it(tmp_path: Path) -> None:
         preprocess(tmp_path, umbrella="ghostty/vt/absent.h")
 
 
+@needs_zig
 def test_preprocess_failure_names_the_header(tmp_path: Path) -> None:
     # A header the preprocessor rejects: the error surfaces the header name and
     # the compiler diagnostic rather than a bare non-zero exit.
