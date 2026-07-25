@@ -74,6 +74,12 @@ echo ">> Upstream license retained at vendor/ghostty/LICENSE"
 # build per requested target. The host build installs into vendor/dist so its
 # static lib is immediately usable; cross builds install into a scratch prefix
 # that is discarded.
+# The vendored tree is a tarball export, not a git repo: upstream's version
+# detection would walk up into whatever repo contains it (this one) and
+# misread its tags — a v* tag here trips build.zig's tagged-release check.
+# An invalid GIT_DIR makes that detection fail cleanly into its dev fallback.
+export GIT_DIR="${GHOSTTY_DIR}/.git-none"
+
 echo ">> Building libghostty-vt for the host (populates the zig cache)"
 zig_build "${GHOSTTY_DIR}" "${ZIG_BUILD_OPTS[@]}" --prefix "${VENDOR_DIR}/dist"
 

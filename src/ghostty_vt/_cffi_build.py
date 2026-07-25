@@ -102,7 +102,16 @@ def _build_static_lib() -> Path:
             str(VENDOR_DIR / "dist"),
         ],
         cwd=GHOSTTY_DIR,
-        env={**os.environ, "ZIG_GLOBAL_CACHE_DIR": str(ZIG_CACHE_DIR)},
+        env={
+            **os.environ,
+            "ZIG_GLOBAL_CACHE_DIR": str(ZIG_CACHE_DIR),
+            # The vendored tree is a tarball export, not a git repo: upstream's
+            # version detection would walk up into whatever repo contains the
+            # build (this one, or a user's own) and misread its tags — a v*
+            # tag trips build.zig's tagged-release check. An invalid GIT_DIR
+            # makes that detection fail cleanly into its dev fallback.
+            "GIT_DIR": str(GHOSTTY_DIR / ".git-none"),
+        },
         check=True,
     )
     lib = _find_static_lib()
