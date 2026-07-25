@@ -1,6 +1,6 @@
 [project]
 name = "python-libghostty-vt"
-version = "0.1.0.dev0"
+version = "0.1.0"
 description = "Idiomatic, fully typed Python bindings for libghostty-vt, the C-ABI terminal library extracted from Ghostty."
 readme = "README.md"
 requires-python = ">=3.14"
